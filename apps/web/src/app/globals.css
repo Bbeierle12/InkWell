@@ -20,6 +20,15 @@ body {
   font-family: system-ui, -apple-system, sans-serif;
 }
 
+/* Editor placeholder styling */
+.tiptap p.is-editor-empty:first-child::before {
+  color: #adb5bd;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
 /* Ghost text decoration styling */
 .inkwell-ghost-text {
   opacity: 0.4;

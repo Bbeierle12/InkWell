@@ -1,8 +1,9 @@
 /**
- * Diff Preview Extension (Decision 1-3-1b: Option C — Inline + floating toolbar)
+ * Diff Preview Extension
  *
  * Renders AI edit proposals as inline diffs: deletions shown with red strikethrough,
- * additions shown as green underline widgets. A floating toolbar allows accept/reject.
+ * additions shown as green underline widgets. Accept/reject is handled by the React
+ * layer (Editor.tsx) which properly integrates with AIOperationSession for undo atomicity.
  *
  * Protocol:
  * - Enter preview: `tr.setMeta(DiffPreviewPluginKey, { instructions })`
@@ -110,47 +111,6 @@ function buildDecorations(
         break;
       }
     }
-  }
-
-  // Add floating toolbar widget at the position of the first instruction
-  if (instructions.length > 0) {
-    const toolbarPos = instructions[0].range.from;
-    decorations.push(
-      Decoration.widget(
-        toolbarPos,
-        (view) => {
-          const toolbar = document.createElement('div');
-          toolbar.className = 'inkwell-diff-toolbar';
-
-          const acceptBtn = document.createElement('button');
-          acceptBtn.className = 'inkwell-diff-accept';
-          acceptBtn.textContent = 'Accept';
-          acceptBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (view) {
-              const tr = view.state.tr.setMeta(DiffPreviewPluginKey, { accept: true });
-              view.dispatch(tr);
-            }
-          });
-
-          const rejectBtn = document.createElement('button');
-          rejectBtn.className = 'inkwell-diff-reject';
-          rejectBtn.textContent = 'Reject';
-          rejectBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            if (view) {
-              const tr = view.state.tr.setMeta(DiffPreviewPluginKey, { reject: true });
-              view.dispatch(tr);
-            }
-          });
-
-          toolbar.appendChild(acceptBtn);
-          toolbar.appendChild(rejectBtn);
-          return toolbar;
-        },
-        { side: -1 },
-      ),
-    );
   }
 
   return DecorationSet.create(doc, decorations);

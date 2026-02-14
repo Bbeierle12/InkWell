@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { Editor } from '@tiptap/core';
 import { OperationType } from '@inkwell/shared';
 import { DEBOUNCE_MS } from '@inkwell/shared';
-import { GhostTextPluginKey } from '@inkwell/editor';
+import { GhostTextPluginKey, shouldUpdateGhostText } from '@inkwell/editor';
 import { getDocumentAI } from '../lib/document-ai-instance';
 
 interface UseGhostTextOptions {
@@ -67,6 +67,11 @@ export function useGhostText({ editor, enabled = true }: UseGhostTextOptions) {
           if (signal.aborted) return;
 
           if (result.raw && editor) {
+            // Skip update if the new suggestion is too similar (prevents flicker)
+            const previousText = suggestionRef.current?.text ?? '';
+            if (!shouldUpdateGhostText(previousText, result.raw)) {
+              return;
+            }
             suggestionRef.current = { text: result.raw, pos: from };
             const tr = editor.state.tr.setMeta(GhostTextPluginKey, {
               text: result.raw,

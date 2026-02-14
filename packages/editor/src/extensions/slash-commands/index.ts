@@ -8,6 +8,7 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import type { EditorView } from '@tiptap/pm/view';
 
 export interface SlashCommandItem {
   title: string;
@@ -46,6 +47,18 @@ function filterCommands(commands: SlashCommandItem[], query: string): SlashComma
       cmd.command.toLowerCase().startsWith(lower) ||
       cmd.title.toLowerCase().startsWith(lower),
   );
+}
+
+/** Dismiss the slash menu: delete typed slash text and deactivate. */
+function dismissSlashMenu(view: EditorView, pluginState: SlashCommandsPluginState): void {
+  const deleteFrom = pluginState.triggerPos;
+  const deleteTo = view.state.selection.from;
+  if (deleteTo > deleteFrom) {
+    const deleteTr = view.state.tr.delete(deleteFrom, deleteTo);
+    view.dispatch(deleteTr);
+  }
+  const deactivateTr = view.state.tr.setMeta(SlashCommandsPluginKey, 'deactivate');
+  view.dispatch(deactivateTr);
 }
 
 /**
@@ -119,6 +132,37 @@ export const SlashCommands = Extension.create<SlashCommandsOptions>({
           },
         },
 
+        // Manage click-outside dismissal listener
+        view(editorView: EditorView) {
+          let menuActive = false;
+
+          const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as HTMLElement;
+            if (target.closest('.inkwell-slash-menu')) return;
+
+            const state = SlashCommandsPluginKey.getState(editorView.state) as SlashCommandsPluginState;
+            if (!state.active) return;
+
+            dismissSlashMenu(editorView, state);
+          };
+
+          return {
+            update(view: EditorView) {
+              const state = SlashCommandsPluginKey.getState(view.state) as SlashCommandsPluginState;
+              if (state.active && !menuActive) {
+                menuActive = true;
+                setTimeout(() => document.addEventListener('mousedown', handleClickOutside), 0);
+              } else if (!state.active && menuActive) {
+                menuActive = false;
+                document.removeEventListener('mousedown', handleClickOutside);
+              }
+            },
+            destroy() {
+              document.removeEventListener('mousedown', handleClickOutside);
+            },
+          };
+        },
+
         props: {
           handleTextInput(view, from, _to, text) {
             const state = SlashCommandsPluginKey.getState(view.state) as SlashCommandsPluginState;
@@ -126,6 +170,15 @@ export const SlashCommands = Extension.create<SlashCommandsOptions>({
             // Detect "/" trigger at start of line or after whitespace
             if (text === '/' && !state.active) {
               const $pos = view.state.doc.resolve(from);
+
+              // Do not trigger inside code blocks or inline code
+              if ($pos.parent.type.name === 'codeBlock') {
+                return false;
+              }
+              if ($pos.marks().some((mark: any) => mark.type.name === 'code')) {
+                return false;
+              }
+
               const textBefore = $pos.parent.textBetween(
                 0,
                 $pos.parentOffset,
@@ -192,7 +245,6 @@ export const SlashCommands = Extension.create<SlashCommandsOptions>({
                 const parts = state.query.split(/\s+/);
                 const commandName = parts[0] || '';
                 const args = parts.slice(1).join(' ');
-                const { from, to } = view.state.selection;
 
                 // Delete the slash command text: from triggerPos to current cursor
                 const deleteFrom = state.triggerPos;
@@ -204,25 +256,15 @@ export const SlashCommands = Extension.create<SlashCommandsOptions>({
                 const deactivateTr = view.state.tr.setMeta(SlashCommandsPluginKey, 'deactivate');
                 view.dispatch(deactivateTr);
 
-                // Execute the command
+                // Read selection AFTER deletion so positions reflect the cleaned-up document
+                const { from, to } = view.state.selection;
                 extensionOptions.onExecute(commandName, args, { from, to });
                 return true;
               }
 
               case 'Escape': {
                 event.preventDefault();
-
-                // Delete the slash command text (from trigger to current cursor)
-                const deleteFrom = state.triggerPos;
-                const deleteTo = view.state.selection.from;
-                if (deleteTo > deleteFrom) {
-                  const deleteTr = view.state.tr.delete(deleteFrom, deleteTo);
-                  view.dispatch(deleteTr);
-                }
-
-                // Deactivate
-                const deactivateTr = view.state.tr.setMeta(SlashCommandsPluginKey, 'deactivate');
-                view.dispatch(deactivateTr);
+                dismissSlashMenu(view, state);
                 return true;
               }
 
@@ -242,15 +284,27 @@ export const SlashCommands = Extension.create<SlashCommandsOptions>({
               () => {
                 const container = document.createElement('div');
                 container.className = 'inkwell-slash-menu';
+                container.setAttribute('role', 'listbox');
+                container.setAttribute('aria-label', 'Slash commands');
+                container.id = 'inkwell-slash-menu';
 
                 for (let i = 0; i < pluginState.filteredCommands.length; i++) {
                   const cmd = pluginState.filteredCommands[i];
+                  const isSelected = i === pluginState.selectedIndex;
+                  const itemId = `inkwell-slash-item-${i}`;
                   const item = document.createElement('div');
                   item.className =
                     'inkwell-slash-item' +
-                    (i === pluginState.selectedIndex ? ' inkwell-slash-item-selected' : '');
+                    (isSelected ? ' inkwell-slash-item-selected' : '');
+                  item.setAttribute('role', 'option');
+                  item.setAttribute('aria-selected', String(isSelected));
+                  item.id = itemId;
                   item.textContent = `${cmd.title} — ${cmd.description}`;
                   container.appendChild(item);
+
+                  if (isSelected) {
+                    container.setAttribute('aria-activedescendant', itemId);
+                  }
                 }
 
                 return container;

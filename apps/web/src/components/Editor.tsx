@@ -8,6 +8,7 @@
  */
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import Placeholder from '@tiptap/extension-placeholder';
 import { OperationType } from '@inkwell/shared';
 import {
   GhostText,
@@ -42,6 +43,9 @@ export function Editor() {
   const editor = useEditor({
     extensions: [
       StarterKit,
+      Placeholder.configure({
+        placeholder: 'Start writing...',
+      }),
       GhostText,
       DiffPreview,
       AIUndo,
@@ -55,7 +59,7 @@ export function Editor() {
         },
       }),
     ],
-    content: '<p>Start writing...</p>',
+    content: '',
     editorProps: {
       attributes: {
         class: 'min-h-[60vh] outline-none prose prose-lg max-w-none',

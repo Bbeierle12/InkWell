@@ -3,6 +3,7 @@
  *
  * Renders AI inline suggestions as translucent decorations ahead of the cursor.
  * Uses decoration-based rendering (never serialized to the document).
+ * Press Tab to accept the suggestion and insert it into the document.
  */
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
@@ -21,6 +22,17 @@ export interface GhostTextMeta {
   /** Optional: set to `performance.now()` to enable TTFT measurement. */
   requestedAt?: number;
 }
+
+/** Structured plugin state that tracks both decorations and the raw suggestion. */
+export interface GhostTextPluginState {
+  decorations: DecorationSet;
+  suggestion: { text: string; pos: number } | null;
+}
+
+const EMPTY_STATE: GhostTextPluginState = {
+  decorations: DecorationSet.empty,
+  suggestion: null,
+};
 
 /**
  * Time-to-first-token (TTFT) measurement for ghost text.
@@ -54,6 +66,8 @@ export function clearGhostTextTTFT(): void {
   ttftEntries.length = 0;
 }
 
+export { shouldUpdateGhostText } from './stability';
+
 /**
  * TipTap extension that displays AI-generated ghost text as ProseMirror decorations.
  *
@@ -61,6 +75,7 @@ export function clearGhostTextTTFT(): void {
  * - Set ghost text: `tr.setMeta(GhostTextPluginKey, { text: 'suggestion', pos: cursorPos })`
  * - Clear ghost text: `tr.setMeta(GhostTextPluginKey, null)`
  * - Ghost text is automatically cleared when the document changes (user typing).
+ * - Press Tab to accept the ghost text and insert it into the document.
  * - For TTFT measurement, include `requestedAt: performance.now()` in the meta.
  */
 export const GhostText = Extension.create<GhostTextOptions>({
@@ -76,15 +91,15 @@ export const GhostText = Extension.create<GhostTextOptions>({
       new Plugin({
         key: GhostTextPluginKey,
         state: {
-          init() {
-            return DecorationSet.empty;
+          init(): GhostTextPluginState {
+            return EMPTY_STATE;
           },
-          apply(tr, decorations, _oldState, newState) {
+          apply(tr, pluginState: GhostTextPluginState, _oldState, newState): GhostTextPluginState {
             const meta = tr.getMeta(GhostTextPluginKey);
 
             // Explicit clear
             if (meta === null) {
-              return DecorationSet.empty;
+              return EMPTY_STATE;
             }
 
             // New ghost text
@@ -111,21 +126,44 @@ export const GhostText = Extension.create<GhostTextOptions>({
                 });
               }
 
-              return DecorationSet.create(newState.doc, [widget]);
+              return {
+                decorations: DecorationSet.create(newState.doc, [widget]),
+                suggestion: { text, pos },
+              };
             }
 
             // If the document changed (user typed), clear ghost text
             if (tr.docChanged) {
-              return DecorationSet.empty;
+              return EMPTY_STATE;
             }
 
             // Otherwise map existing decorations through document changes
-            return decorations.map(tr.mapping, tr.doc);
+            return {
+              ...pluginState,
+              decorations: pluginState.decorations.map(tr.mapping, tr.doc),
+            };
           },
         },
         props: {
           decorations(state) {
-            return GhostTextPluginKey.getState(state);
+            const ps = GhostTextPluginKey.getState(state) as GhostTextPluginState;
+            return ps?.decorations ?? DecorationSet.empty;
+          },
+
+          handleKeyDown(view, event) {
+            if (event.key !== 'Tab') return false;
+
+            const ps = GhostTextPluginKey.getState(view.state) as GhostTextPluginState;
+            if (!ps?.suggestion) return false;
+
+            event.preventDefault();
+            const { text, pos } = ps.suggestion;
+
+            // Insert the suggestion text and clear ghost text in one transaction
+            const tr = view.state.tr.insertText(text, pos);
+            tr.setMeta(GhostTextPluginKey, null);
+            view.dispatch(tr);
+            return true;
           },
         },
       }),
