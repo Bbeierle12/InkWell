@@ -2,19 +2,52 @@
  * Model Router
  *
  * Routes AI operations to the appropriate model (local vs. cloud)
- * based on operation type, document sensitivity, and user preferences.
+ * based on operation type, document sensitivity, user preferences,
+ * and network availability.
  */
 import { OperationType, ModelTarget, RoutingMode } from '@inkwell/shared';
 import type { RoutingResult } from './types';
+import { CloudUnavailableError } from './types';
+
+export { CloudUnavailableError } from './types';
 
 export class ModelRouter {
   private mode: RoutingMode = RoutingMode.Auto;
+  private online = true;
 
   /**
    * Set the routing mode (auto, local-only, cloud-only).
    */
   setMode(mode: RoutingMode): void {
     this.mode = mode;
+  }
+
+  /**
+   * Get the current routing mode.
+   */
+  getMode(): RoutingMode {
+    return this.mode;
+  }
+
+  /**
+   * Set the network availability status.
+   *
+   * When offline:
+   * - Auto mode: all operations fall back to local model.
+   * - CloudOnly mode: route() throws CloudUnavailableError.
+   * - LocalOnly mode: unaffected.
+   *
+   * When online again, cloud routing resumes normally.
+   */
+  setOnline(online: boolean): void {
+    this.online = online;
+  }
+
+  /**
+   * Check whether the router considers the network available.
+   */
+  isOnline(): boolean {
+    return this.online;
   }
 
   /**
@@ -43,6 +76,9 @@ export class ModelRouter {
         };
 
       case RoutingMode.CloudOnly:
+        if (!this.online) {
+          throw new CloudUnavailableError(operation);
+        }
         return {
           target: this.cloudTargetForOperation(operation),
           operation,
@@ -81,9 +117,22 @@ export class ModelRouter {
   }
 
   /**
-   * Route in Auto mode based on operation characteristics.
+   * Route in Auto mode based on operation characteristics
+   * and network availability.
+   *
+   * When offline, all operations fall back to Local with an
+   * appropriate reason string.
    */
   private routeAuto(operation: OperationType): RoutingResult {
+    // Offline fallback: route everything to local
+    if (!this.online) {
+      return {
+        target: ModelTarget.Local,
+        operation,
+        reason: `Auto mode — offline fallback: ${operation} routed to local model`,
+      };
+    }
+
     switch (operation) {
       case OperationType.InlineSuggest:
         return {

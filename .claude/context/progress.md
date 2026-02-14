@@ -1,15 +1,15 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T18:21:06Z
-version: 1.6
+last_updated: 2026-02-14T18:48:33Z
+version: 1.7
 author: Claude Code PM System
 ---
 
 # Progress: Inkwell
 
-## Current Status: Implementation Phase 2 — Editor Transaction Layer Complete
+## Current Status: Implementation Phase 3 — DocumentAI Runtime Core Complete
 
-Phases 1-5 TDD scaffolding complete. Implementation Phase 2 (Editor Transaction Layer) is complete: transaction utilities, enhanced stress tests, selective AI undo, TTFT instrumentation, and Y.js integration decision. All 452 TypeScript tests + 57 Rust tests pass: `@inkwell/editor` (186), `@inkwell/document-ai` (180), `@inkwell/mcp-workspace` (55), `@inkwell/shared` (15), `@inkwell/evals` (16), and `inkwell-desktop` (57 Rust).
+Phases 1-5 TDD scaffolding complete. Implementation Phases 2-3 complete. Phase 3 enhanced the DocumentAI runtime: ModelRouter with network awareness (offline fallback, online restoration, CloudOnly fail-if-offline), QueueManager with Debouncer and integrated DocumentAIQueue (budget enforcement, backpressure, teardown), and Context Manager verified complete. All 503 TypeScript tests + 57 Rust tests pass: `@inkwell/editor` (186), `@inkwell/document-ai` (231), `@inkwell/mcp-workspace` (55), `@inkwell/shared` (15), `@inkwell/evals` (16), and `inkwell-desktop` (57 Rust).
 
 ## Completed Work
 
@@ -19,10 +19,11 @@ Phases 1-5 TDD scaffolding complete. Implementation Phase 2 (Editor Transaction 
 - 121 deterministic tests covering all 12 node types, 6 mark types, nesting rules, content rules, serialization round-trips, edge cases
 - 15 property-based tests using fast-check (10K+ iterations) verifying schema validity and serialize-deserialize stability across arbitrary documents
 
-**Section 2.1: Model Router + Privacy Canary (33 tests)**
-- 23 router tests: Auto/LocalOnly/CloudOnly mode routing, private document protection, mode switching, concurrent routing
+**Section 2.1: Model Router + Privacy Canary (50 tests)**
+- 40 router tests: Auto/LocalOnly/CloudOnly mode routing, private document protection, mode switching, concurrent routing, offline fallback, online restoration, CloudOnly fail-if-offline, network status accessors
 - 10 canary tests: Privacy canary detection in MSW interceptor, per-operation verification, no false positives
 - Implemented `ModelRouter.route()` with privacy-first routing logic
+- Added `setOnline()/isOnline()` network awareness, `CloudUnavailableError` for CloudOnly+offline
 
 **Section 1.2: Transaction Integrity + AI Undo (21 tests)**
 - 9 transaction integrity tests: insertText, delete, replaceWith, undo/redo (20 edits), step mapping, failure recovery, large document (100 para), 10,000-node stress test (<100ms/tx), composition
@@ -42,10 +43,12 @@ Phases 1-5 TDD scaffolding complete. Implementation Phase 2 (Editor Transaction 
 
 ### TDD Phase 2 — DocumentAI Runtime (2026-02-14)
 
-**Section 2.2: Queue Manager (40 tests)**
-- QueueManager: priority ordering, FIFO for equal priority, contentHash dedup, same-operation-type cancellation, cancelAll with AbortController cleanup
+**Section 2.2: Queue Manager (74 tests)**
+- QueueManager: priority ordering, FIFO for equal priority, contentHash dedup, same-operation-type cancellation, cancelAll with AbortController cleanup (40 tests)
 - TokenBudgetTracker: sliding-window per-minute enforcement, expiry cleanup, canSpend/record
 - BackpressureManager: pause/resume state machine, onStateChange callbacks
+- Debouncer: configurable window (default 500ms), rapid-fire collapsing, cancel, pending state, teardown (14 tests)
+- DocumentAIQueue: integrated orchestration of QueueManager + TokenBudgetTracker + BackpressureManager + Debouncer; submit()/enqueueImmediate(), budget enforcement, backpressure auto-pause, teardown with no orphaned callbacks (20 tests)
 
 **Section 2.3: Context Manager (47 tests)**
 - ContextManager.build(): stable/volatile splitting, token counting (~4 chars/token), cacheKey (djb2 hash)
@@ -178,24 +181,24 @@ Phases 1-5 TDD scaffolding complete. Implementation Phase 2 (Editor Transaction 
 |-------|--------|
 | `@inkwell/shared` tests | 15 passed (2 test files) |
 | `@inkwell/editor` tests | 186 passed (10 test files) |
-| `@inkwell/document-ai` tests | 180 passed (9 test files) |
+| `@inkwell/document-ai` tests | 231 passed (11 test files) |
 | `@inkwell/mcp-workspace` tests | 55 passed (9 test files) |
 | `@inkwell/evals` tests | 16 passed (2 test files) |
 | `inkwell-desktop` Rust tests | 57 passed (0 warnings) |
-| **Total tests** | **509 passed, 0 failed** |
+| **Total tests** | **560 passed, 0 failed** |
 | Typecheck (shared) | Clean |
 | Typecheck (mcp-workspace) | Clean |
 | Typecheck (evals) | Clean |
 
 ## Git Status
 
-- Git repository initialized, 2 commits on `main` branch
-- Uncommitted changes: Phase 2 editor transaction layer implementation (7 modified files, 2 new files)
+- Git repository initialized, 3 commits on `main` branch
+- Uncommitted changes: Phase 3 DocumentAI runtime enhancements (4 modified files, 4 new files)
 
 ## Immediate Next Steps
 
-1. **Commit Phase 2 work** — Transaction utilities, enhanced tests, AI undo improvements, TTFT, DECISIONS.md
-2. **Implementation Phase 3** — Wire up real DocumentAI runtime integration (editor ↔ document-ai)
+1. **Commit Phase 3 work** — Router network awareness, debouncer, DocumentAIQueue, enhanced tests
+2. **Implementation Phase 4** — Wire up real DocumentAI service integration (editor ↔ document-ai end-to-end)
 3. **E2E tests** (Playwright), performance benchmarks
 4. **Tier 2/3 evals** — Local judge + cloud judge implementations
 
@@ -213,3 +216,4 @@ Phases 1-5 TDD scaffolding complete. Implementation Phase 2 (Editor Transaction 
 - 2026-02-14T02:44:00Z: Phase 4 TDD complete — 418 tests (361 TS + 57 Rust), local inference layer implemented
 - 2026-02-14T17:19:48Z: Phase 5 TDD complete — 504 tests (447 TS + 57 Rust), MCP workspace + evals + voice pipeline
 - 2026-02-14T18:21:06Z: Implementation Phase 2 complete — 509 tests (452 TS + 57 Rust), editor transaction layer hardened
+- 2026-02-14T18:48:33Z: Implementation Phase 3 complete — 560 tests (503 TS + 57 Rust), DocumentAI runtime core (router network awareness, debouncer, integrated queue)

@@ -59,3 +59,28 @@ export function remapPosition(
 
   return pos;
 }
+
+/**
+ * Check if a position falls within a range that was deleted by concurrent changes.
+ *
+ * A "deleted range" is a change where content was removed (to > from)
+ * and nothing was inserted (insertLength === 0).
+ *
+ * @param originalPos - The position to check (in the original document coordinate space)
+ * @param changes - Array of concurrent changes
+ * @returns true if the position is inside a purely-deleted range
+ */
+export function isPositionInDeletedRange(
+  originalPos: number,
+  changes: Array<PositionChange>,
+): boolean {
+  for (const change of changes) {
+    // Only consider pure deletions (no insertion)
+    if (change.to > change.from && change.insertLength === 0) {
+      if (originalPos > change.from && originalPos <= change.to) {
+        return true;
+      }
+    }
+  }
+  return false;
+}

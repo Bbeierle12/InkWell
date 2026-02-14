@@ -26,7 +26,7 @@ const VALID_TYPES = new Set(['replace', 'insert', 'delete']);
  */
 export function validateInstructions(
   instructions: AIEditInstruction[],
-  _schema: unknown,
+  schema?: { marks: Record<string, unknown> } | null,
 ): string | null {
   if (!Array.isArray(instructions)) {
     return 'Instructions must be an array';
@@ -91,6 +91,10 @@ export function validateInstructions(
         }
         if (typeof mark.type !== 'string') {
           return `${prefix}: marks[${j}].type must be a string`;
+        }
+        // Schema-aware mark type validation
+        if (schema && !(mark.type in schema.marks)) {
+          return `${prefix}: marks[${j}].type "${mark.type}" does not exist in schema`;
         }
       }
     }

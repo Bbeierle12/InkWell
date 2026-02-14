@@ -99,6 +99,36 @@ export interface MCPServerConfig {
   watchDirectories?: string[];
 }
 
+// --- Reconciler Result Types ---
+
+/** Reason why the reconciler rejected an edit batch. */
+export enum ReconcileRejectionReason {
+  ValidationFailed = 'validation_failed',
+  OverlappingRanges = 'overlapping_ranges',
+  StalePositionDeleted = 'stale_position_deleted',
+  InvalidMarkType = 'invalid_mark_type',
+  SchemaViolation = 'schema_violation',
+  ApplyError = 'apply_error',
+}
+
+/** Successful reconciliation: all instructions applied cleanly. */
+export interface ReconcileSuccess {
+  ok: true;
+  doc: unknown; // PMNode at runtime
+  applied: AIEditInstruction[];
+}
+
+/** Failed reconciliation: no instructions were applied. */
+export interface ReconcileFailure {
+  ok: false;
+  reason: ReconcileRejectionReason;
+  message: string;
+  instructionIndex?: number;
+}
+
+/** Discriminated union returned by Reconciler.apply(). */
+export type ReconcileResult = ReconcileSuccess | ReconcileFailure;
+
 // --- Voice Pipeline Types ---
 
 /** States of the voice-to-text pipeline FSM. */

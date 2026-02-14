@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T18:21:06Z
-version: 1.5
+last_updated: 2026-02-14T18:48:33Z
+version: 1.6
 author: Claude Code PM System
 ---
 
@@ -36,9 +36,12 @@ AI operations that produce multiple editor steps are wrapped to undo atomically:
 ### 4. Request Priority Queue with Backpressure [IMPLEMENTED + TESTED]
 DocumentAI uses a priority queue for AI requests:
 - `QueueManager` with priority ordering, FIFO for equal priority, contentHash dedup
-- `TokenBudgetTracker` sliding-window per-minute enforcement (Invariant #11 — 40 tests)
+- `Debouncer` with configurable window (default 500ms), rapid-fire collapsing to latest request
+- `TokenBudgetTracker` sliding-window per-minute enforcement (Invariant #11)
 - `BackpressureManager` pause/resume state machine with callbacks
+- `DocumentAIQueue` integrated orchestration: submit() with debounce, enqueueImmediate() bypassing debounce, budget enforcement rejects when exhausted, automatic backpressure on budget consumption, teardown() cancels all timers and AbortControllers (74 tests total)
 - All requests carry AbortControllers; `cancelAll()` aborts everything (Invariant #6)
+- `teardown()` ensures no orphaned callbacks or timers after close (Invariant #7)
 
 ### 5. Stable/Volatile Prompt Splitting [IMPLEMENTED + TESTED]
 Prompts are split into two parts for Claude's prompt caching:
@@ -50,8 +53,16 @@ Prompts are split into two parts for Claude's prompt caching:
 ### 6. Privacy Canary Pattern [IMPLEMENTED + TESTED]
 Private documents embed a canary string (`CANARY_PRIVATE_DO_NOT_TRANSMIT`):
 - `ModelRouter.route()` checks `isPrivate` first — always routes to `ModelTarget.Local`
+- Private override takes priority over all other routing — even CloudOnly+offline never throws for private docs
 - MSW interceptor throws fatal error if canary detected in outgoing requests
-- 23 router tests + 10 canary tests verify defense-in-depth (Invariant #8)
+- 40 router tests + 10 canary tests verify defense-in-depth (Invariant #8)
+
+### 6b. Network-Aware Routing [IMPLEMENTED + TESTED]
+ModelRouter tracks network availability for offline/online transitions:
+- `setOnline(false)` → Auto mode falls back all cloud operations to Local; CloudOnly mode throws `CloudUnavailableError`
+- `setOnline(true)` → cloud routing resumes immediately (online restoration)
+- LocalOnly mode is unaffected by network status
+- `isOnline()` accessor for UI status indicators
 
 ### 7. VCR Fixture Testing [IMPLEMENTED + TESTED]
 Claude API interactions use recorded fixtures:

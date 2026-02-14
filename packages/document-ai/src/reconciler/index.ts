@@ -8,15 +8,25 @@
  * - reconciler-valid-or-reject: Parse always returns valid instructions or empty array
  * - stream-errors-no-partial-edits: Apply is atomic; on failure, no edits are applied
  */
-import type { AIEditInstruction, MarkSpec } from '@inkwell/shared';
+import type {
+  AIEditInstruction,
+  MarkSpec,
+  ReconcileResult,
+  ReconcileSuccess,
+  ReconcileFailure,
+} from '@inkwell/shared';
+import { ReconcileRejectionReason } from '@inkwell/shared';
 import { validateInstructions } from './schema-validator';
-import { remapPosition } from './position-mapper';
+import { remapPosition, isPositionInDeletedRange } from './position-mapper';
 import type { PositionChange } from './position-mapper';
+import { detectOverlaps } from './overlap-detector';
 import { Node as PMNode, Fragment, Slice, Mark, Schema } from 'prosemirror-model';
 
-export { remapPosition } from './position-mapper';
+export { remapPosition, isPositionInDeletedRange } from './position-mapper';
 export { validateInstructions } from './schema-validator';
+export { detectOverlaps } from './overlap-detector';
 export type { PositionChange } from './position-mapper';
+export type { OverlapResult } from './overlap-detector';
 
 export class Reconciler {
   /**
@@ -57,12 +67,12 @@ export class Reconciler {
    *
    * Instructions are sorted by position and applied from end to start
    * to avoid position shifting issues. If any instruction would produce
-   * an invalid document, ALL instructions are rejected (return null).
+   * an invalid document, ALL instructions are rejected.
    *
    * @param instructions - Array of validated AIEditInstructions
    * @param doc - ProseMirror Node (the document root)
    * @param changes - Optional array of concurrent changes for position remapping
-   * @returns The new document if all instructions applied successfully, or null
+   * @returns ReconcileResult — discriminated union with ok: true/false
    *
    * Ref: Invariant stream-errors-no-partial-edits
    */
@@ -70,15 +80,52 @@ export class Reconciler {
     instructions: AIEditInstruction[],
     doc: PMNode,
     changes?: PositionChange[],
-  ): PMNode | null {
+  ): ReconcileResult {
     if (instructions.length === 0) {
-      return doc;
+      return { ok: true, doc, applied: [] } as ReconcileSuccess;
     }
 
-    // Pre-validate instruction structure
+    // Structural validation
     const validationError = validateInstructions(instructions, null);
     if (validationError !== null) {
-      return null;
+      return {
+        ok: false,
+        reason: ReconcileRejectionReason.ValidationFailed,
+        message: validationError,
+      } as ReconcileFailure;
+    }
+
+    // Schema-aware mark validation (check mark types exist in schema)
+    const pmSchema = doc.type.schema;
+    const schemaValidationError = validateInstructions(instructions, pmSchema);
+    if (schemaValidationError !== null) {
+      // Determine if it's an invalid mark type issue
+      const reason = schemaValidationError.includes('does not exist in schema')
+        ? ReconcileRejectionReason.InvalidMarkType
+        : ReconcileRejectionReason.ValidationFailed;
+      return {
+        ok: false,
+        reason,
+        message: schemaValidationError,
+      } as ReconcileFailure;
+    }
+
+    // Stale-position-in-deleted-range check before remapping
+    if (changes && changes.length > 0) {
+      for (let i = 0; i < instructions.length; i++) {
+        const inst = instructions[i];
+        if (
+          isPositionInDeletedRange(inst.range.from, changes) ||
+          isPositionInDeletedRange(inst.range.to, changes)
+        ) {
+          return {
+            ok: false,
+            reason: ReconcileRejectionReason.StalePositionDeleted,
+            message: `Instruction [${i}]: position falls within a deleted range`,
+            instructionIndex: i,
+          } as ReconcileFailure;
+        }
+      }
     }
 
     // Remap positions if concurrent changes were provided
@@ -93,24 +140,37 @@ export class Reconciler {
       }));
     }
 
+    // Overlap detection on remapped instructions
+    const overlap = detectOverlaps(remapped);
+    if (overlap !== null) {
+      return {
+        ok: false,
+        reason: ReconcileRejectionReason.OverlappingRanges,
+        message: `Instructions [${overlap.indices[0]}] and [${overlap.indices[1]}] have overlapping ranges`,
+      } as ReconcileFailure;
+    }
+
     // Sort instructions by `from` position descending (process end-to-start)
     // This ensures earlier edits don't shift positions of later ones
     const sorted = [...remapped].sort((a, b) => b.range.from - a.range.from);
 
-    const schema = doc.type.schema;
     let result = doc;
 
     try {
       for (const inst of sorted) {
-        result = this._applyOne(inst, result, schema);
+        result = this._applyOne(inst, result, pmSchema);
       }
 
       // Validate the final document against the schema
       result.check();
-      return result;
-    } catch {
+      return { ok: true, doc: result, applied: remapped } as ReconcileSuccess;
+    } catch (err) {
       // Any error means we reject all instructions
-      return null;
+      return {
+        ok: false,
+        reason: ReconcileRejectionReason.ApplyError,
+        message: err instanceof Error ? err.message : 'Unknown apply error',
+      } as ReconcileFailure;
     }
   }
 

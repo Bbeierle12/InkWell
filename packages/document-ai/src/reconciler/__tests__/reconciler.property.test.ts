@@ -4,7 +4,7 @@ import { Reconciler } from '../index';
 import { validateInstructions } from '../schema-validator';
 import { remapPosition } from '../position-mapper';
 import { schema } from 'prosemirror-test-builder';
-import type { AIEditInstruction } from '@inkwell/shared';
+import type { AIEditInstruction, ReconcileSuccess, ReconcileFailure } from '@inkwell/shared';
 
 // ---------------------------------------------------------------------------
 // Arbitraries (fast-check generators)
@@ -114,7 +114,7 @@ describe('2.4 Reconciler -- Property Tests', () => {
           return result === null || (typeof result === 'string' && result.length > 0);
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 10_000 },
     );
   });
 
@@ -131,7 +131,7 @@ describe('2.4 Reconciler -- Property Tests', () => {
         // Result must be an array
         return Array.isArray(result);
       }),
-      { numRuns: 200 },
+      { numRuns: 10_000 },
     );
   });
 
@@ -155,7 +155,7 @@ describe('2.4 Reconciler -- Property Tests', () => {
           return true;
         },
       ),
-      { numRuns: 200 },
+      { numRuns: 10_000 },
     );
   });
 
@@ -169,7 +169,7 @@ describe('2.4 Reconciler -- Property Tests', () => {
           return typeof result === 'number' && result >= 0;
         },
       ),
-      { numRuns: 500 },
+      { numRuns: 10_000 },
     );
   });
 
@@ -178,15 +178,14 @@ describe('2.4 Reconciler -- Property Tests', () => {
       fc.property(fc.nat({ max: 10000 }), (pos) => {
         return remapPosition(pos, []) === pos;
       }),
-      { numRuns: 100 },
+      { numRuns: 10_000 },
     );
   });
 
-  it('when apply succeeds (returns non-null), the result always passes doc.check()', () => {
+  it('when apply succeeds (returns ok: true), the result always passes doc.check()', () => {
     // Generate instructions that target valid positions within a known document
     const docText = 'Hello World Test Document';
     const document = makeDoc(docText);
-    const maxPos = document.content.size + 1; // +1 for the paragraph end boundary
 
     // Generate instructions within the document's valid text range (1..docTextLen)
     const arbValidInstruction: fc.Arbitrary<AIEditInstruction> = fc.oneof(
@@ -229,10 +228,11 @@ describe('2.4 Reconciler -- Property Tests', () => {
         (instruction) => {
           const result = reconciler.apply([instruction], document);
 
-          if (result !== null) {
+          if (result.ok) {
             // The result must pass schema validation
             try {
-              result.check();
+              (result as ReconcileSuccess).doc as any;
+              ((result as ReconcileSuccess).doc as any).check();
               return true;
             } catch {
               // If check() throws, that is a violation
@@ -240,11 +240,11 @@ describe('2.4 Reconciler -- Property Tests', () => {
             }
           }
 
-          // null result is fine (rejection is valid behavior)
+          // failure result is fine (rejection is valid behavior)
           return true;
         },
       ),
-      { numRuns: 300 },
+      { numRuns: 10_000 },
     );
   });
 
@@ -264,7 +264,99 @@ describe('2.4 Reconciler -- Property Tests', () => {
           return true;
         },
       ),
-      { numRuns: 100 },
+      { numRuns: 10_000 },
+    );
+  });
+
+  // --- New property tests for Phase 4 ---
+
+  it('arbitrary (doc, instruction, concurrent changes) triples never cause partial corruption', () => {
+    const docText = 'Hello World Test Document For Fuzzing';
+    const document = makeDoc(docText);
+
+    const arbValidInstruction: fc.Arbitrary<AIEditInstruction> = fc.oneof(
+      fc.tuple(
+        fc.nat({ max: docText.length - 1 }),
+        fc.nat({ max: docText.length - 1 }),
+      ).chain(([a, b]) => {
+        const from = Math.min(a, b) + 1;
+        const to = Math.max(a, b) + 1;
+        return fc.record({
+          type: fc.constant('replace' as const),
+          range: fc.constant({ from, to }),
+          content: fc.string({ minLength: 1, maxLength: 20 }),
+        });
+      }),
+      fc.nat({ max: docText.length - 1 }).map((pos) => ({
+        type: 'insert' as const,
+        range: { from: pos + 1, to: pos + 1 },
+        content: 'x',
+      })),
+    );
+
+    fc.assert(
+      fc.property(
+        arbValidInstruction,
+        fc.array(arbChange, { maxLength: 5 }),
+        (instruction, changes) => {
+          const originalJson = document.toJSON();
+          const result = reconciler.apply([instruction], document, changes);
+
+          // Original doc must be untouched regardless of outcome
+          expect(document.toJSON()).toEqual(originalJson);
+
+          if (result.ok) {
+            // Successful result must pass check()
+            try {
+              ((result as ReconcileSuccess).doc as any).check();
+            } catch {
+              return false;
+            }
+          }
+          return true;
+        },
+      ),
+      { numRuns: 10_000 },
+    );
+  });
+
+  it('remapped positions are never negative (10k iterations)', () => {
+    fc.assert(
+      fc.property(
+        fc.nat({ max: 5000 }),
+        fc.array(arbChange, { maxLength: 20 }),
+        (pos, changes) => {
+          const result = remapPosition(pos, changes);
+          return result >= 0;
+        },
+      ),
+      { numRuns: 10_000 },
+    );
+  });
+
+  it('rejected edits leave doc JSON-identical to original (10k iterations)', () => {
+    fc.assert(
+      fc.property(
+        fc.array(arbInstruction, { minLength: 1, maxLength: 5 }),
+        fc.array(arbChange, { maxLength: 5 }),
+        (instructions, changes) => {
+          const document = makeDoc('Hello World Test');
+          const originalJson = document.toJSON();
+
+          const result = reconciler.apply(instructions, document, changes);
+
+          // Regardless of success or failure, original doc is untouched
+          expect(document.toJSON()).toEqual(originalJson);
+
+          // If failed, there should be no partial state leaked
+          if (!result.ok) {
+            // Verify doc is completely unchanged
+            expect(document.toJSON()).toEqual(originalJson);
+          }
+          return true;
+        },
+      ),
+      { numRuns: 10_000 },
     );
   });
 });

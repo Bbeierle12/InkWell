@@ -45,3 +45,55 @@ Y.js provides CRDT-based conflict resolution for concurrent user-vs-AI edits, bu
 The following tests confirm this decision:
 - `collaboration/__tests__/yjs-conflicts.test.ts` — 4 conflict resolution scenarios
 - `collaboration/__tests__/origin-filter.test.ts` — 6 origin detection scenarios
+
+---
+
+## Decision 1-3-1b: Diff Preview
+
+**Date:** 2026-02-14T19:33:05Z
+**Status:** Decided
+**Context:** Phase 4 — Edit Reconciler Enhancement
+
+### Problem
+
+How should AI edit proposals be presented to users for review before applying? The reconciler produces `AIEditInstruction[]` arrays, but users need a visual way to see what will change and accept or reject the edits.
+
+### Options Evaluated
+
+| Option | Description | Pros | Cons |
+|--------|-------------|------|------|
+| A | Side-by-side panel showing before/after | Clear full-document comparison | Context switching; requires screen real estate; doesn't show inline context |
+| B | Modal dialog with diff output | Simple to implement; familiar pattern | Blocks editing; poor UX for small changes; breaks flow |
+| C | Inline diff with floating toolbar | No context switching; shows changes in place; granular accept/reject; follows existing ghost-text pattern | More complex decoration logic; toolbar positioning |
+
+### Decision
+
+**Option C: Inline diff with floating toolbar.**
+
+### Rationale
+
+1. **Follows the ghost-text decoration pattern.** The codebase already uses `Decoration.widget` and `Decoration.inline` for ghost text suggestions (`packages/editor/src/extensions/ghost-text/index.ts`). The diff preview reuses the same `PluginKey` + meta-based communication protocol, making it architecturally consistent.
+
+2. **No context switching.** Users see proposed changes exactly where they occur in the document. Deletions appear as red strikethrough inline decorations, insertions appear as green underline widget decorations. This is the most natural way to review text changes.
+
+3. **Granular accept/reject.** The floating toolbar provides Accept and Reject buttons without blocking the editor. The preview auto-clears on user typing (same behavior as ghost text), so it never gets in the way.
+
+4. **Decoration-only rendering.** The diff preview never modifies the actual document — it's entirely decoration-based. This means the undo stack is never polluted, and reject is essentially free (just clear decorations).
+
+### Implementation
+
+- `DiffPreviewPluginKey` — ProseMirror PluginKey for state management
+- `Decoration.inline(from, to, { class: 'inkwell-diff-delete' })` — red strikethrough for deletions
+- `Decoration.widget(pos, () => span)` — green underline span for insertions
+- `Decoration.widget(pos, () => toolbar)` — floating Accept/Reject toolbar
+- Auto-clear on `tr.docChanged` — user typing dismisses preview
+
+### Consequences
+
+- CSS classes `inkwell-diff-delete`, `inkwell-diff-insert`, `inkwell-diff-toolbar` must be styled in the theme
+- The reconciler's `ReconcileSuccess.applied` instructions feed directly into the diff preview
+- Accept dispatches the actual document mutations; reject simply clears decorations
+
+### Validation
+
+- `diff-preview/__tests__/diff-preview.test.ts` — 7 tests covering decorations, accept, reject, undo isolation, auto-clear, and toolbar rendering

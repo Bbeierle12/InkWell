@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T18:21:06Z
-version: 1.4
+last_updated: 2026-02-14T18:48:33Z
+version: 1.5
 author: Claude Code PM System
 ---
 
@@ -46,12 +46,19 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │   │           ├── index.ts      # clampPosition, safeInsertText, safeDelete, etc.
 │   │           └── __tests__/    # integrity.test.ts (9), integrity.property.test.ts (3)
 │   │
-│   ├── document-ai/             # @inkwell/document-ai (180 tests)
+│   ├── document-ai/             # @inkwell/document-ai (231 tests)
 │   │   └── src/
-│   │       ├── router/          # Model routing (local/Sonnet/Opus) [IMPLEMENTED]
-│   │       │   └── __tests__/   # router.test.ts (23), canary.test.ts (10)
-│   │       ├── queue/           # Priority queue, token budget, backpressure [IMPLEMENTED]
-│   │       │   └── __tests__/   # queue.test.ts (40)
+│   │       ├── router/          # Model routing with network awareness [IMPLEMENTED]
+│   │       │   ├── index.ts     # ModelRouter: setOnline/isOnline, CloudUnavailableError
+│   │       │   ├── types.ts     # RoutingResult, CloudUnavailableError
+│   │       │   └── __tests__/   # router.test.ts (40), canary.test.ts (10)
+│   │       ├── queue/           # Priority queue, debounce, budget, backpressure [IMPLEMENTED]
+│   │       │   ├── index.ts     # QueueManager (priority, dedup, cancel)
+│   │       │   ├── debouncer.ts         # Configurable debounce with rapid-fire collapsing
+│   │       │   ├── document-ai-queue.ts # Integrated orchestration layer
+│   │       │   ├── token-budget.ts      # Sliding-window per-minute enforcement
+│   │       │   ├── backpressure.ts      # Pause/resume state machine
+│   │       │   └── __tests__/   # queue.test.ts (40), debouncer.test.ts (14), document-ai-queue.test.ts (20)
 │   │       ├── context/         # Prompt assembly, prefix cache, sliding window [IMPLEMENTED]
 │   │       │   └── __tests__/   # context.test.ts (47)
 │   │       ├── reconciler/      # AI output → ProseMirror transactions [IMPLEMENTED]

@@ -1,5 +1,5 @@
 import { OperationType, ModelTarget, RoutingMode } from '@inkwell/shared';
-import { ModelRouter } from '../index';
+import { ModelRouter, CloudUnavailableError } from '../index';
 
 /**
  * 2.1 Model Routing Tests
@@ -162,6 +162,20 @@ describe('2.1 Model Routing', () => {
         }
       }
     });
+
+    it('should route private documents to Local even when offline', () => {
+      router.setOnline(false);
+      const modes = Object.values(RoutingMode);
+      const operations = Object.values(OperationType);
+      for (const mode of modes) {
+        router.setMode(mode);
+        for (const op of operations) {
+          // Private override takes priority — never throws, even in CloudOnly+offline
+          const result = router.route(op, true);
+          expect(result.target).toBe(ModelTarget.Local);
+        }
+      }
+    });
   });
 
   // ── CloudOnly + Private Override ──────────────────────────────────
@@ -259,6 +273,188 @@ describe('2.1 Model Routing', () => {
           }
         }
       }
+    });
+  });
+
+  // ── Offline Fallback ──────────────────────────────────────────────
+
+  describe('Offline fallback (Auto mode)', () => {
+    it('should route ALL operations to Local when offline in Auto mode', () => {
+      router.setMode(RoutingMode.Auto);
+      router.setOnline(false);
+
+      const operations = Object.values(OperationType);
+      for (const op of operations) {
+        const result = router.route(op, false);
+        expect(result.target).toBe(ModelTarget.Local);
+        expect(result.reason).toContain('offline');
+      }
+    });
+
+    it('should route Rewrite to Local when offline (normally Sonnet)', () => {
+      router.setMode(RoutingMode.Auto);
+      router.setOnline(false);
+
+      const result = router.route(OperationType.Rewrite, false);
+      expect(result.target).toBe(ModelTarget.Local);
+    });
+
+    it('should route Critique to Local when offline (normally Opus)', () => {
+      router.setMode(RoutingMode.Auto);
+      router.setOnline(false);
+
+      const result = router.route(OperationType.Critique, false);
+      expect(result.target).toBe(ModelTarget.Local);
+    });
+
+    it('should keep InlineSuggest on Local when offline (already local)', () => {
+      router.setMode(RoutingMode.Auto);
+      router.setOnline(false);
+
+      const result = router.route(OperationType.InlineSuggest, false);
+      expect(result.target).toBe(ModelTarget.Local);
+    });
+
+    it('should include "offline fallback" in reason string', () => {
+      router.setMode(RoutingMode.Auto);
+      router.setOnline(false);
+
+      const result = router.route(OperationType.Summarize, false);
+      expect(result.reason.toLowerCase()).toContain('offline');
+      expect(result.reason.toLowerCase()).toContain('fallback');
+    });
+  });
+
+  // ── Online Restoration ────────────────────────────────────────────
+
+  describe('Online restoration', () => {
+    it('should resume cloud routing when network returns in Auto mode', () => {
+      router.setMode(RoutingMode.Auto);
+
+      // Initially online — Rewrite → Sonnet
+      expect(router.route(OperationType.Rewrite, false).target).toBe(ModelTarget.Sonnet);
+
+      // Go offline — Rewrite → Local
+      router.setOnline(false);
+      expect(router.route(OperationType.Rewrite, false).target).toBe(ModelTarget.Local);
+
+      // Come back online — Rewrite → Sonnet again
+      router.setOnline(true);
+      expect(router.route(OperationType.Rewrite, false).target).toBe(ModelTarget.Sonnet);
+    });
+
+    it('should restore Critique → Opus after offline period', () => {
+      router.setMode(RoutingMode.Auto);
+
+      router.setOnline(false);
+      expect(router.route(OperationType.Critique, false).target).toBe(ModelTarget.Local);
+
+      router.setOnline(true);
+      expect(router.route(OperationType.Critique, false).target).toBe(ModelTarget.Opus);
+    });
+
+    it('should restore all operation routes after offline → online cycle', () => {
+      router.setMode(RoutingMode.Auto);
+
+      // Capture online routing
+      const onlineTargets = Object.values(OperationType).map((op) => ({
+        op,
+        target: router.route(op, false).target,
+      }));
+
+      // Go offline and back
+      router.setOnline(false);
+      router.setOnline(true);
+
+      // Verify all routes match original
+      for (const { op, target } of onlineTargets) {
+        expect(router.route(op, false).target).toBe(target);
+      }
+    });
+  });
+
+  // ── CloudOnly + Offline ───────────────────────────────────────────
+
+  describe('CloudOnly mode — offline behavior', () => {
+    it('should throw CloudUnavailableError when offline in CloudOnly mode', () => {
+      router.setMode(RoutingMode.CloudOnly);
+      router.setOnline(false);
+
+      expect(() => router.route(OperationType.Rewrite, false))
+        .toThrow(CloudUnavailableError);
+    });
+
+    it('should throw for all operation types when offline in CloudOnly mode', () => {
+      router.setMode(RoutingMode.CloudOnly);
+      router.setOnline(false);
+
+      const operations = Object.values(OperationType);
+      for (const op of operations) {
+        expect(() => router.route(op, false)).toThrow(CloudUnavailableError);
+      }
+    });
+
+    it('should include operation name in CloudUnavailableError message', () => {
+      router.setMode(RoutingMode.CloudOnly);
+      router.setOnline(false);
+
+      try {
+        router.route(OperationType.Critique, false);
+        expect.unreachable('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(CloudUnavailableError);
+        expect((err as Error).message).toContain(OperationType.Critique);
+      }
+    });
+
+    it('should resume after coming back online in CloudOnly mode', () => {
+      router.setMode(RoutingMode.CloudOnly);
+
+      router.setOnline(false);
+      expect(() => router.route(OperationType.Rewrite, false)).toThrow(CloudUnavailableError);
+
+      router.setOnline(true);
+      const result = router.route(OperationType.Rewrite, false);
+      expect(result.target).toBe(ModelTarget.Sonnet);
+    });
+  });
+
+  // ── LocalOnly + Offline ───────────────────────────────────────────
+
+  describe('LocalOnly mode — offline is irrelevant', () => {
+    it('should route to Local regardless of network status', () => {
+      router.setMode(RoutingMode.LocalOnly);
+
+      router.setOnline(false);
+      const offlineResult = router.route(OperationType.Rewrite, false);
+      expect(offlineResult.target).toBe(ModelTarget.Local);
+
+      router.setOnline(true);
+      const onlineResult = router.route(OperationType.Rewrite, false);
+      expect(onlineResult.target).toBe(ModelTarget.Local);
+    });
+  });
+
+  // ── Network Status Accessors ──────────────────────────────────────
+
+  describe('Network status accessors', () => {
+    it('should default to online', () => {
+      expect(router.isOnline()).toBe(true);
+    });
+
+    it('should reflect setOnline changes', () => {
+      router.setOnline(false);
+      expect(router.isOnline()).toBe(false);
+
+      router.setOnline(true);
+      expect(router.isOnline()).toBe(true);
+    });
+
+    it('should expose current mode via getMode()', () => {
+      expect(router.getMode()).toBe(RoutingMode.Auto);
+
+      router.setMode(RoutingMode.LocalOnly);
+      expect(router.getMode()).toBe(RoutingMode.LocalOnly);
     });
   });
 });
