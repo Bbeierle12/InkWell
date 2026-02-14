@@ -1,9 +1,8 @@
 /**
  * Token Counter
  *
- * Provides token estimation for text content.
- * Uses a heuristic of ~4 characters per token, consistent with
- * conventions used elsewhere in the codebase.
+ * Provides token estimation and real token counting via the Claude API.
+ * Falls back to a heuristic of ~4 characters per token when the API is unavailable.
  */
 
 /**
@@ -22,18 +21,42 @@ export function estimateTokens(text: string): number {
 }
 
 /**
- * Count the number of tokens in the given text.
+ * Count the number of tokens in the given text using the Claude API.
  *
- * Currently uses the heuristic estimator. In production, this could
- * be replaced with a call to Claude's token counting endpoint.
+ * Calls the /v1/messages/count_tokens endpoint for accurate counting.
+ * Falls back to the heuristic estimator on any error (network, non-OK response).
  *
  * Invariant: token-counts-match-claude-tokenizer
  */
 export async function countTokens(
   text: string,
-  _apiKey: string,
+  apiKey: string,
+  options?: { baseUrl?: string; model?: string },
 ): Promise<number> {
-  // For now, use the heuristic. The async signature allows future
-  // replacement with an API call without changing the interface.
-  return estimateTokens(text);
+  const baseUrl = options?.baseUrl ?? 'https://api.anthropic.com';
+  const model = options?.model ?? 'claude-sonnet-4-5-20250929';
+
+  try {
+    const response = await fetch(`${baseUrl}/v1/messages/count_tokens`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: text }],
+      }),
+    });
+
+    if (!response.ok) {
+      return estimateTokens(text);
+    }
+
+    const body = (await response.json()) as { input_tokens: number };
+    return body.input_tokens;
+  } catch {
+    return estimateTokens(text);
+  }
 }

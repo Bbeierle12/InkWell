@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T18:48:33Z
-version: 1.5
+last_updated: 2026-02-14T20:40:52Z
+version: 1.7
 author: Claude Code PM System
 ---
 
@@ -20,7 +20,7 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 ├── packages/
 │   ├── shared/                   # @inkwell/shared (15 tests)
 │   │   └── src/
-│   │       ├── types.ts          # OperationType, ModelTarget, RoutingMode, MCP types, Voice enums
+│   │       ├── types.ts          # OperationType, ModelTarget, RoutingMode, ReconcileResult, MCP types, Voice enums
 │   │       ├── constants.ts      # PRIVACY_CANARY, TOKEN_BUDGETS, thresholds, INVARIANT_IDS
 │   │       ├── voice-pipeline.ts # FSM transition table + transition() [IMPLEMENTED]
 │   │       ├── utils/
@@ -29,7 +29,7 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │   │       ├── __tests__/        # voice-pipeline.test.ts (10), utils.test.ts (5)
 │   │       └── index.ts          # Barrel exports
 │   │
-│   ├── editor/                   # @inkwell/editor (186 tests)
+│   ├── editor/                   # @inkwell/editor (190 tests)
 │   │   └── src/
 │   │       ├── schema/           # ProseMirror nodes + marks [IMPLEMENTED]
 │   │       │   └── __tests__/    # schema.test.ts (121), schema.property.test.ts (15)
@@ -38,15 +38,17 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │   │       │   │   └── __tests__/ # ghost-text.test.ts (11)
 │   │       │   ├── ai-undo/     # Atomic undo with closeHistory [IMPLEMENTED]
 │   │       │   │   └── __tests__/ # ai-undo.test.ts (9)
-│   │       │   ├── slash-commands/ # "/" command palette
-│   │       │   └── diff-preview/  # Before/after rendering
+│   │       │   ├── slash-commands/ # "/" command palette [IMPLEMENTED]
+│   │       │   │   └── __tests__/ # slash-commands.test.ts (4)
+│   │       │   └── diff-preview/  # Inline diff with floating toolbar [IMPLEMENTED]
+│   │       │       └── __tests__/ # diff-preview.test.ts (8)
 │   │       ├── collaboration/    # Y.js + origin filtering [IMPLEMENTED]
 │   │       │   └── __tests__/    # origin-filter.test.ts (6), yjs-conflicts.test.ts (4)
 │   │       └── transactions/     # Utilities + integrity verification [IMPLEMENTED]
 │   │           ├── index.ts      # clampPosition, safeInsertText, safeDelete, etc.
 │   │           └── __tests__/    # integrity.test.ts (9), integrity.property.test.ts (3)
 │   │
-│   ├── document-ai/             # @inkwell/document-ai (231 tests)
+│   ├── document-ai/             # @inkwell/document-ai (285 tests)
 │   │   └── src/
 │   │       ├── router/          # Model routing with network awareness [IMPLEMENTED]
 │   │       │   ├── index.ts     # ModelRouter: setOnline/isOnline, CloudUnavailableError
@@ -61,10 +63,23 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │   │       │   └── __tests__/   # queue.test.ts (40), debouncer.test.ts (14), document-ai-queue.test.ts (20)
 │   │       ├── context/         # Prompt assembly, prefix cache, sliding window [IMPLEMENTED]
 │   │       │   └── __tests__/   # context.test.ts (47)
-│   │       ├── reconciler/      # AI output → ProseMirror transactions [IMPLEMENTED]
-│   │       │   └── __tests__/   # reconciler.test.ts (38), reconciler.property.test.ts (7)
-│   │       ├── claude/          # Streaming client, SSE parser, token counter [IMPLEMENTED]
-│   │       │   └── __tests__/   # contract.test.ts (4), stream-errors.test.ts (8), stop-reason.test.ts (3)
+│   │       ├── reconciler/      # AI output → ProseMirror transactions [IMPLEMENTED + ENHANCED]
+│   │       │   ├── overlap-detector.ts  # Sweep-line overlap detection
+│   │       │   └── __tests__/   # reconciler.test.ts (64), reconciler.property.test.ts (10)
+│   │       ├── prompts/         # Prompt templates per operation [IMPLEMENTED]
+│   │       │   ├── index.ts     # getPromptTemplate(), renderPrompt()
+│   │       │   ├── rewrite.ts   # Rewrite system/user prompts
+│   │       │   ├── summarize.ts # Summarize prompts
+│   │       │   ├── expand.ts    # Expand prompts
+│   │       │   ├── critique.ts  # Critique prompts (non-editing output)
+│   │       │   └── __tests__/   # prompts.test.ts (8)
+│   │       ├── claude/          # Streaming client, SSE parser, token counter, response parser [IMPLEMENTED]
+│   │       │   ├── client.ts    # ClaudeClient.stream() with system + cache_control
+│   │       │   ├── response-parser.ts  # parseAIResponse(), collectAndParse()
+│   │       │   ├── token-counter.ts    # estimateTokens() + countTokens() (API with fallback)
+│   │       │   └── __tests__/   # contract.test.ts (6), stream-errors.test.ts (8), stop-reason.test.ts (3), response-parser.test.ts (6), token-counter.test.ts (4)
+│   │       ├── service.ts       # DocumentAIServiceImpl orchestration [IMPLEMENTED]
+│   │       ├── __tests__/       # service.test.ts (5)
 │   │       ├── test-setup.ts    # MSW server + privacy canary interceptor
 │   │       └── types.ts         # DocumentAIService interface
 │   │
@@ -107,11 +122,11 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │       │   └── benches/         # Criterion benchmarks
 │       └── tauri.conf.json
 │
-├── evals/                       # @inkwell/evals (16 tests)
+├── evals/                       # @inkwell/evals (18 tests)
 │   └── src/
 │       ├── compare.ts           # Similarity scoring (exactMatch, cosine, BLEU-4, ROUGE-L) [IMPLEMENTED]
 │       ├── compare.test.ts      # 12 tests
-│       ├── tier1/               # Structural checks [IMPLEMENTED] — structural.test.ts (4)
+│       ├── tier1/               # Structural checks [IMPLEMENTED] — structural.test.ts (6)
 │       ├── tier2/               # Local 8B judge (stub)
 │       ├── tier3/               # Claude-as-judge (stub)
 │       └── golden/              # Reference outputs (rewrite, summarize, expand, critique)

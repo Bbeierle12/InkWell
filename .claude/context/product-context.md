@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T00:11:35Z
-version: 1.0
+last_updated: 2026-02-14T20:40:52Z
+version: 1.1
 author: Claude Code PM System
 ---
 
@@ -33,21 +33,23 @@ author: Claude Code PM System
 - Stability threshold prevents flicker (Levenshtein ratio)
 - Never serialized into document
 
-### 2. Slash Commands
-- `/rewrite` — Restyle selected text
+### 2. Slash Commands [IMPLEMENTED]
+- `/rewrite` — Restyle selected text (with target tone arg, e.g., `/rewrite formal`)
 - `/summarize` — Condense to key points
 - `/expand` — Add detail and elaboration
 - `/critique` — Deep analysis with suggestions
+- ProseMirror plugin with floating command palette, keyboard navigation, filtered search
 
 ### 3. Voice Input
 - whisper.cpp local transcription
 - Voice Refine operation cleans up transcription
 - Works offline via desktop app
 
-### 4. Diff Preview
-- Shows before/after for AI rewrites
-- Accept/reject UI
-- Single-undo-step for accepted changes
+### 4. Diff Preview [IMPLEMENTED]
+- Shows before/after for AI rewrites (inline red strikethrough / green underline)
+- Accept/reject UI with floating toolbar
+- Single-undo-step for accepted changes via AIOperationSession
+- Full editor-to-AI-to-editor pipeline wired: Editor → useDocumentAI → DocumentAIServiceImpl → Claude API → response parser → diff preview
 
 ### 5. Real-Time Collaboration
 - Y.js CRDT-based sync

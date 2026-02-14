@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T17:19:48Z
-version: 1.1
+last_updated: 2026-02-14T20:40:52Z
+version: 1.2
 author: Claude Code PM System
 ---
 
@@ -37,6 +37,7 @@ author: Claude Code PM System
 | llama.cpp | Local LLM inference (via Rust FFI) |
 | whisper.cpp | Local speech-to-text (via Rust FFI) |
 | eventsource-parser | ^3.0.0 — SSE stream parsing |
+| Prompt caching | `cache_control: {type: "ephemeral"}` + `anthropic-beta: prompt-caching-2024-07-31` header |
 
 ## Desktop
 

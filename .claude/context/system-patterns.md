@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T18:48:33Z
-version: 1.6
+last_updated: 2026-02-14T20:40:52Z
+version: 1.8
 author: Claude Code PM System
 ---
 
@@ -88,13 +88,27 @@ Packages point `main` and `types` to source TypeScript files (`./src/index.ts`).
 ### Static Export for Tauri
 Next.js is configured with `output: 'export'` to produce a static site that Tauri loads as its frontend. This means no server-side rendering — all AI operations happen client-side or through Tauri's Rust bridge.
 
-### Reconciler as Gatekeeper [IMPLEMENTED + TESTED]
+### Reconciler as Gatekeeper [IMPLEMENTED + ENHANCED]
 The reconciler pattern ensures AI output integrity:
 - `Reconciler.parse()` JSON → `AIEditInstruction[]` with structural validation
-- `validateInstructions()` validates against schema (Invariant #10 — never throws)
+- `Reconciler.apply()` returns typed `ReconcileResult` (discriminated union: `ReconcileSuccess | ReconcileFailure`)
+- `ReconcileRejectionReason` enum: ValidationFailed, OverlappingRanges, StalePositionDeleted, InvalidMarkType, SchemaViolation, ApplyError
+- `validateInstructions()` validates structure + schema-aware mark types (Invariant #10 — never throws)
+- `detectOverlaps()` sweep-line algorithm rejects overlapping ranges (allows dual inserts at same point)
+- `isPositionInDeletedRange()` detects stale positions within purely-deleted concurrent ranges
 - `remapPosition()` maps positions accounting for concurrent insertions/deletions
-- `Reconciler.apply()` sorts end-to-start, applies via ProseMirror `doc.replace()`
-- Rejects entirely on validation failure — no partial edits (Invariant #12 — 45 tests)
+- Sorts end-to-start, applies via ProseMirror `doc.replace()`, doc.check() validates result
+- Rejects entirely on any failure — no partial edits (Invariant #12 — 74 tests including 10 fuzz at 10K iterations)
+
+### Diff Preview (Decision 1-3-1b: Option C) [IMPLEMENTED + TESTED]
+AI edit proposals are shown inline with a floating toolbar:
+- `DiffPreviewPluginKey` + meta-based protocol (same pattern as ghost-text)
+- `Decoration.inline` with `inkwell-diff-delete` for deletions (red strikethrough)
+- `Decoration.widget` with `inkwell-diff-insert` for insertions (green underline)
+- Floating Accept/Reject toolbar widget at first instruction position
+- Decoration-only rendering — never modifies actual document, undo stack not polluted
+- Auto-clear on `tr.docChanged` (user typing dismisses preview)
+- 8 tests covering decorations, accept, reject, undo isolation, auto-clear, toolbar
 
 ### 3-Tier Eval System [TIER 1 IMPLEMENTED + TESTED]
 AI quality is evaluated at three levels:
@@ -144,12 +158,52 @@ Voice-to-text pipeline uses a finite state machine:
 - `transition(current, event)` returns `VoicePipelineTransition | null` for invalid transitions
 - 10 tests covering all valid transitions and invalid event rejection
 
+### 14. Prompt Template System [IMPLEMENTED + TESTED]
+AI operations use structured prompt templates:
+- `getPromptTemplate(operation)` maps `OperationType` to `PromptTemplate { system, userTemplate }`
+- `renderPrompt(template, vars)` performs `{{placeholder}}` substitution on userTemplate
+- Each operation has its own template file: rewrite, summarize, expand, critique
+- Rewrite/summarize/expand output: JSON array of `AIEditInstruction[]`
+- Critique output: `{observations: string[], suggestions: string[]}` (non-editing)
+- InlineSuggest has no template (local-only, no Claude call)
+- 8 tests covering all operations, placeholder substitution, error cases
+
+### 15. Response Parser Pattern [IMPLEMENTED + TESTED]
+Streaming Claude output is parsed into structured instructions:
+- `parseAIResponse(text)`: trims whitespace, extracts JSON from markdown code fences, validates via `validateInstructions()`
+- `collectAndParse(stream)`: accumulates all deltas from AsyncGenerator, then parses
+- Reuses `validateInstructions()` from reconciler (no duplication)
+- Returns `[]` on any parse/validation error (fail-safe, never throws)
+- 6 tests covering valid/invalid JSON, code fences, collectAndParse
+
+### 16. DocumentAIServiceImpl Orchestration [IMPLEMENTED + TESTED]
+Full pipeline orchestration from operation request to edit instructions:
+- `route(operation)` → ModelRouter routing decision
+- `buildContext(docContent, cursorPos)` → ContextManager context assembly
+- `getPromptTemplate(operation)` + `renderPrompt()` → system + user messages
+- `client.stream(messages, {system, systemCacheControl})` → streaming deltas
+- `collectAndParse(stream)` → `{raw, instructions}`
+- Local targets (InlineSuggest) skip Claude call, return empty result
+- `destroy()` tears down all resources; subsequent calls throw
+- 5 tests with MSW mocks
+
+### 17. SlashCommands Extension [IMPLEMENTED + TESTED]
+ProseMirror plugin for "/" command palette:
+- `SlashCommandsPluginKey` + meta-based activation (same pattern as ghost-text/diff-preview)
+- Plugin state: `active`, `query`, `triggerPos`, `filteredCommands`, `selectedIndex`
+- `handleTextInput`: "/" after whitespace/start-of-line triggers command mode
+- Navigation: ArrowUp/Down through filtered list, Enter executes, Escape dismisses
+- Query parsing: first space splits command name from args (e.g., "/rewrite formal" → command="rewrite", args="formal")
+- `Decoration.widget` renders floating command palette
+- `onExecute(command, args, selection)` callback for integration
+- 4 tests using real TipTap Editor with meta-based state transitions
+
 ## Data Flow
 
 ```
 User types → Debounce (500ms) → Router → Queue → Context Assembly
-    → Claude/llama.cpp → Stream → Reconciler → Transaction → Editor
-    → Ghost Text / Diff Preview → User accepts/rejects
+    → Prompt Template → Claude Stream → Response Parser → Reconciler
+    → Transaction → Editor → Ghost Text / Diff Preview → User accepts/rejects
 ```
 
 ## Invariant Enforcement

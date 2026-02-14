@@ -50,7 +50,14 @@ export class ClaudeClient {
    */
   async *stream(
     messages: Array<{ role: string; content: string }>,
-    options?: { model?: string; maxTokens?: number; signal?: AbortSignal; stopSequences?: string[] },
+    options?: {
+      model?: string;
+      maxTokens?: number;
+      signal?: AbortSignal;
+      stopSequences?: string[];
+      system?: string;
+      systemCacheControl?: boolean;
+    },
   ): AsyncGenerator<string, void, unknown> {
     const model = options?.model ?? this.defaultModel;
     const maxTokens = options?.maxTokens ?? 4096;
@@ -67,13 +74,30 @@ export class ClaudeClient {
       requestBody.stop_sequences = options.stopSequences;
     }
 
+    // System prompt support with optional prompt caching
+    if (options?.system) {
+      if (options.systemCacheControl) {
+        requestBody.system = [
+          { type: 'text', text: options.system, cache_control: { type: 'ephemeral' } },
+        ];
+      } else {
+        requestBody.system = options.system;
+      }
+    }
+
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+      'x-api-key': this.apiKey,
+      'anthropic-version': '2023-06-01',
+    };
+
+    if (options?.systemCacheControl) {
+      headers['anthropic-beta'] = 'prompt-caching-2024-07-31';
+    }
+
     const response = await fetch(`${this.baseUrl}/v1/messages`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01',
-      },
+      headers,
       body: JSON.stringify(requestBody),
       signal,
     });

@@ -52,6 +52,32 @@ const critiqueGolden: { pairs: CritiquePair[] } = JSON.parse(
   readFileSync(critiqueGoldenPath, 'utf-8'),
 );
 
+interface SummarizePair {
+  input: string;
+  output: string;
+}
+
+interface ExpandPair {
+  input: string;
+  output: string;
+}
+
+const summarizeGoldenPath = resolve(
+  __dirname,
+  '../golden/summarize/golden.json',
+);
+const summarizeGolden: { pairs: SummarizePair[] } = JSON.parse(
+  readFileSync(summarizeGoldenPath, 'utf-8'),
+);
+
+const expandGoldenPath = resolve(
+  __dirname,
+  '../golden/expand/golden.json',
+);
+const expandGolden: { pairs: ExpandPair[] } = JSON.parse(
+  readFileSync(expandGoldenPath, 'utf-8'),
+);
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -246,5 +272,95 @@ describe('Tier 1 — Structural Evaluation', () => {
     const processedOrdered = processedDoc.match(orderedPattern);
     expect(processedOrdered).not.toBeNull();
     expect(processedOrdered!.length).toBe(2);
+  });
+
+  it('should produce outputs with correct encoding (no HTML entities, null bytes, or replacement chars)', () => {
+    // Ref: Eval Plan — Tier 1: encoding correctness
+
+    const badPatterns = [
+      { pattern: /&amp;|&lt;|&gt;|&quot;|&#\d+;/, name: 'HTML entities' },
+      { pattern: /\x00/, name: 'null bytes' },
+      { pattern: /\uFFFD/, name: 'replacement characters' },
+    ];
+
+    // Check rewrite golden outputs
+    for (const pair of rewriteGolden.pairs) {
+      for (const { pattern, name } of badPatterns) {
+        expect(
+          pattern.test(pair.output),
+          `Rewrite output "${pair.output.slice(0, 40)}..." contains ${name}`,
+        ).toBe(false);
+      }
+    }
+
+    // Check critique golden outputs
+    for (const pair of critiqueGolden.pairs) {
+      const serialized = JSON.stringify(pair.output);
+      for (const { pattern, name } of badPatterns) {
+        expect(
+          pattern.test(serialized),
+          `Critique output for "${pair.input.slice(0, 40)}..." contains ${name}`,
+        ).toBe(false);
+      }
+    }
+
+    // Check summarize golden outputs
+    for (const pair of summarizeGolden.pairs) {
+      for (const { pattern, name } of badPatterns) {
+        expect(
+          pattern.test(pair.output),
+          `Summarize output "${pair.output.slice(0, 40)}..." contains ${name}`,
+        ).toBe(false);
+      }
+    }
+
+    // Check expand golden outputs
+    for (const pair of expandGolden.pairs) {
+      for (const { pattern, name } of badPatterns) {
+        expect(
+          pattern.test(pair.output),
+          `Expand output "${pair.output.slice(0, 40)}..." contains ${name}`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it('should have required fields present with correct types in golden outputs', () => {
+    // Ref: Eval Plan — Tier 1: required fields validation
+
+    // Critique: observations is non-empty string[], suggestions is non-empty string[]
+    for (const pair of critiqueGolden.pairs) {
+      expect(Array.isArray(pair.output.observations)).toBe(true);
+      expect(pair.output.observations.length).toBeGreaterThan(0);
+      for (const obs of pair.output.observations) {
+        expect(typeof obs).toBe('string');
+        expect(obs.length).toBeGreaterThan(0);
+      }
+
+      expect(Array.isArray(pair.output.suggestions)).toBe(true);
+      expect(pair.output.suggestions.length).toBeGreaterThan(0);
+      for (const sug of pair.output.suggestions) {
+        expect(typeof sug).toBe('string');
+        expect(sug.length).toBeGreaterThan(0);
+      }
+    }
+
+    // Rewrite: output is a non-empty string
+    for (const pair of rewriteGolden.pairs) {
+      expect(typeof pair.output).toBe('string');
+      expect(pair.output.length).toBeGreaterThan(0);
+    }
+
+    // Summarize: output is a non-empty string
+    for (const pair of summarizeGolden.pairs) {
+      expect(typeof pair.output).toBe('string');
+      expect(pair.output.length).toBeGreaterThan(0);
+    }
+
+    // Expand: output is a non-empty string
+    for (const pair of expandGolden.pairs) {
+      expect(typeof pair.output).toBe('string');
+      expect(pair.output.length).toBeGreaterThan(0);
+    }
   });
 });

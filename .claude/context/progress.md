@@ -1,15 +1,15 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T18:48:33Z
-version: 1.7
+last_updated: 2026-02-14T20:40:52Z
+version: 1.9
 author: Claude Code PM System
 ---
 
 # Progress: Inkwell
 
-## Current Status: Implementation Phase 3 — DocumentAI Runtime Core Complete
+## Current Status: Implementation Phase 5 — Claude API Integration Complete
 
-Phases 1-5 TDD scaffolding complete. Implementation Phases 2-3 complete. Phase 3 enhanced the DocumentAI runtime: ModelRouter with network awareness (offline fallback, online restoration, CloudOnly fail-if-offline), QueueManager with Debouncer and integrated DocumentAIQueue (budget enforcement, backpressure, teardown), and Context Manager verified complete. All 503 TypeScript tests + 57 Rust tests pass: `@inkwell/editor` (186), `@inkwell/document-ai` (231), `@inkwell/mcp-workspace` (55), `@inkwell/shared` (15), `@inkwell/evals` (16), and `inkwell-desktop` (57 Rust).
+Phases 1-5 TDD scaffolding complete. Implementation Phases 2-5 complete. Phase 5 connected the deterministic pipeline to the real Claude API: prompt templates for all 4 operations (rewrite/summarize/expand/critique), Claude client enhanced with `cache_control` + `anthropic-beta` header for prompt caching, structured response parser (stream text → `AIEditInstruction[]`), real token counting via `/v1/messages/count_tokens` API with heuristic fallback, full `DocumentAIServiceImpl` orchestration layer, SlashCommands ProseMirror extension with floating command palette, and web app wiring (Editor component, useDocumentAI/useGhostText hooks, singleton service). All 563 TypeScript tests + 57 Rust tests pass: `@inkwell/editor` (190), `@inkwell/document-ai` (285), `@inkwell/mcp-workspace` (55), `@inkwell/shared` (15), `@inkwell/evals` (18), and `inkwell-desktop` (57 Rust).
 
 ## Completed Work
 
@@ -56,7 +56,7 @@ Phases 1-5 TDD scaffolding complete. Implementation Phases 2-3 complete. Phase 3
 - analyzeStyle(): formality/sentenceLength/vocabulary/tone heuristics
 - slidingWindow(): cursor-relative extraction, 50/50 budget split, edge cases
 
-**Section 2.4: Edit Reconciler (45 tests — 38 unit + 7 property)**
+**Section 2.4: Edit Reconciler (45 tests — 38 unit + 7 property) [Enhanced in Phase 4]**
 - Reconciler.parse(): JSON parsing with structural validation, fail-safe empty array return
 - Reconciler.apply(): pre-validation, position remapping, end-to-start sorting, ProseMirror doc.replace()
 - remapPosition(): insertion/deletion/replacement offset mapping
@@ -65,6 +65,27 @@ Phases 1-5 TDD scaffolding complete. Implementation Phases 2-3 complete. Phase 3
 
 **Invariants Covered in Phase 2:**
 `queue-respects-token-budget`, `no-orphaned-streams-after-close`, `token-counts-match-claude-tokenizer`, `reconciler-valid-or-reject`, `stream-errors-no-partial-edits`
+
+### Implementation Phase 4 — Edit Reconciler Enhancement (2026-02-14)
+
+**Section 2.4 Enhanced: Edit Reconciler (74 tests — 64 unit + 10 property)**
+- `ReconcileResult` typed return: `ReconcileSuccess { ok, doc, applied }` / `ReconcileFailure { ok, reason, message, instructionIndex? }`
+- `ReconcileRejectionReason` enum: ValidationFailed, OverlappingRanges, StalePositionDeleted, InvalidMarkType, SchemaViolation, ApplyError
+- `detectOverlaps()`: sweep-line algorithm for range overlap detection (allows dual inserts at same point)
+- `isPositionInDeletedRange()`: detects stale positions within purely-deleted concurrent ranges
+- Schema-aware mark validation: verifies mark types exist in ProseMirror schema before apply
+- Concurrent reconciliation: A applies, B applies against A's output with position remapping
+- Formatting preservation: marks on unchanged portions survive adjacent replacements
+- Transaction atomicity: multi-instruction batch where last fails leaves doc unchanged
+- 10 property-based fuzz tests at 10,000 iterations each: never-throw, non-negative positions, doc.check(), immutability, no partial corruption, remapped positions non-negative, rejected edits leave doc identical
+
+**Diff Preview Extension (Decision 1-3-1b: Option C — 8 tests)**
+- `DiffPreviewPluginKey` + meta-based protocol (same pattern as ghost-text)
+- `Decoration.inline` with `inkwell-diff-delete` class for deletions (red strikethrough)
+- `Decoration.widget` with `inkwell-diff-insert` class for insertions (green underline)
+- Floating Accept/Reject toolbar widget
+- Auto-clear on user typing (docChanged), undo stack not polluted during preview
+- 7 tests: deletion decorations, insertion widgets, replace (both), accept, reject, undo isolation, auto-clear, toolbar rendering
 
 ### TDD Phase 3 — Claude API Integration (2026-02-14)
 
@@ -175,32 +196,71 @@ Phases 1-5 TDD scaffolding complete. Implementation Phases 2-3 complete. Phase 3
 - MCP Server: McpServer with 4 registered tools via zod schemas (5 tests)
 - Protocol compliance: Client + InMemoryTransport end-to-end testing (4 tests)
 
+### Implementation Phase 5 — Claude API Integration (2026-02-14)
+
+**Step 1: Prompt Templates (5 new files + tests)**
+- `prompts/index.ts`: Template registry with `getPromptTemplate()` and `renderPrompt()` ({{placeholder}} substitution)
+- `prompts/rewrite.ts`: Rewrite system/user prompts (JSON array of AIEditInstruction output)
+- `prompts/summarize.ts`: Summarize prompts
+- `prompts/expand.ts`: Expand prompts
+- `prompts/critique.ts`: Critique prompts (non-editing: `{observations, suggestions}`)
+- 8 prompt template tests
+
+**Step 2: Claude Client Enhancements**
+- Added `system` + `systemCacheControl` options to `ClaudeClient.stream()` — `cache_control: {type: "ephemeral"}` + `anthropic-beta: prompt-caching-2024-07-31` header
+- New `response-parser.ts`: `parseAIResponse()` (JSON extraction with markdown code fence handling) + `collectAndParse()` (stream accumulator)
+- Real token counting via `/v1/messages/count_tokens` API with `estimateTokens()` fallback
+
+**Step 3: Contract Test Enhancements**
+- +2 contract tests: abort signal propagation, cache_control header verification
+- 6 response parser tests: valid/invalid JSON, code fences, collectAndParse
+- 4 token counter tests: heuristic, API call (MSW), fallback on error
+
+**Step 4: Tier 1 Eval Enhancement**
+- +2 structural eval tests: encoding correctness (no HTML entities/null bytes/replacement chars), required fields with correct types
+- Added summarize + expand golden imports
+
+**Step 5: DocumentAIServiceImpl (orchestration layer)**
+- `service.ts`: Full pipeline — route → buildContext → getPromptTemplate → renderPrompt → client.stream → collectAndParse
+- 5 service tests: routing, context building, full rewrite pipeline (MSW), destroy guard, cache_control
+
+**Step 6: SlashCommands Extension (full implementation)**
+- ProseMirror plugin: `/` trigger detection, query filtering, ArrowUp/Down navigation, Enter executes, Escape dismisses
+- Floating command palette widget decoration
+- 4 tests using real TipTap Editor
+
+**Step 7: Web App Wiring**
+- `document-ai-instance.ts`: Real singleton with `DocumentAIServiceImpl`, reads `NEXT_PUBLIC_CLAUDE_API_KEY`
+- `useDocumentAI.ts`: Full hook — executeOperation (selection → service → diff preview), acceptDiff (AIOperationSession), rejectDiff
+- `useGhostText.ts`: Full hook — debounced inline suggestions, accept/dismiss
+- `Editor.tsx`: TipTap useEditor with StarterKit + GhostText + DiffPreview + AIUndo + SlashCommands
+
 ## Verification Results
 
 | Check | Result |
 |-------|--------|
 | `@inkwell/shared` tests | 15 passed (2 test files) |
-| `@inkwell/editor` tests | 186 passed (10 test files) |
-| `@inkwell/document-ai` tests | 231 passed (11 test files) |
+| `@inkwell/editor` tests | 190 passed (10 test files) |
+| `@inkwell/document-ai` tests | 285 passed (14 test files) |
 | `@inkwell/mcp-workspace` tests | 55 passed (9 test files) |
-| `@inkwell/evals` tests | 16 passed (2 test files) |
+| `@inkwell/evals` tests | 18 passed (2 test files) |
 | `inkwell-desktop` Rust tests | 57 passed (0 warnings) |
-| **Total tests** | **560 passed, 0 failed** |
+| **Total tests** | **620 passed, 0 failed** |
 | Typecheck (shared) | Clean |
 | Typecheck (mcp-workspace) | Clean |
 | Typecheck (evals) | Clean |
 
 ## Git Status
 
-- Git repository initialized, 3 commits on `main` branch
-- Uncommitted changes: Phase 3 DocumentAI runtime enhancements (4 modified files, 4 new files)
+- Git repository initialized, 4 commits on `main` branch
+- Working tree has uncommitted Phase 5 changes
 
 ## Immediate Next Steps
 
-1. **Commit Phase 3 work** — Router network awareness, debouncer, DocumentAIQueue, enhanced tests
-2. **Implementation Phase 4** — Wire up real DocumentAI service integration (editor ↔ document-ai end-to-end)
-3. **E2E tests** (Playwright), performance benchmarks
-4. **Tier 2/3 evals** — Local judge + cloud judge implementations
+1. **Commit Phase 5 work** — Claude API integration, prompt templates, service layer, slash commands, web wiring
+2. **E2E tests** (Playwright), performance benchmarks
+3. **Tier 2/3 evals** — Local judge + cloud judge implementations
+4. **Manual E2E test** — `.env.local` with API key → `pnpm dev` → test slash commands end-to-end
 
 ## Known Issues
 
@@ -217,3 +277,5 @@ Phases 1-5 TDD scaffolding complete. Implementation Phases 2-3 complete. Phase 3
 - 2026-02-14T17:19:48Z: Phase 5 TDD complete — 504 tests (447 TS + 57 Rust), MCP workspace + evals + voice pipeline
 - 2026-02-14T18:21:06Z: Implementation Phase 2 complete — 509 tests (452 TS + 57 Rust), editor transaction layer hardened
 - 2026-02-14T18:48:33Z: Implementation Phase 3 complete — 560 tests (503 TS + 57 Rust), DocumentAI runtime core (router network awareness, debouncer, integrated queue)
+- 2026-02-14T19:47:43Z: Implementation Phase 4 complete — 593 tests (536 TS + 57 Rust), Edit reconciler enhanced (typed results, overlap detection, stale-deleted, schema validation, diff preview)
+- 2026-02-14T20:40:52Z: Implementation Phase 5 complete — 620 tests (563 TS + 57 Rust), Claude API integration (prompt templates, response parser, DocumentAIServiceImpl, slash commands, web app wiring)
