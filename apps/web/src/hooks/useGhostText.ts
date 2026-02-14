@@ -28,6 +28,7 @@ interface UseGhostTextOptions {
 export function useGhostText({ editor, enabled = true }: UseGhostTextOptions) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const suggestionRef = useRef<{ text: string; pos: number } | null>(null);
 
   useEffect(() => {
     if (!editor || !enabled) return;
@@ -41,7 +42,8 @@ export function useGhostText({ editor, enabled = true }: UseGhostTextOptions) {
         abortRef.current.abort();
       }
 
-      // Clear existing ghost text
+      // Clear existing ghost text and tracked suggestion
+      suggestionRef.current = null;
       const clearTr = editor.state.tr.setMeta(GhostTextPluginKey, null);
       editor.view.dispatch(clearTr);
 
@@ -65,6 +67,7 @@ export function useGhostText({ editor, enabled = true }: UseGhostTextOptions) {
           if (signal.aborted) return;
 
           if (result.raw && editor) {
+            suggestionRef.current = { text: result.raw, pos: from };
             const tr = editor.state.tr.setMeta(GhostTextPluginKey, {
               text: result.raw,
               pos: from,
@@ -94,18 +97,20 @@ export function useGhostText({ editor, enabled = true }: UseGhostTextOptions) {
   const accept = useCallback(() => {
     if (!editor) return;
 
-    const ghostState = GhostTextPluginKey.getState(editor.state);
-    if (!ghostState || ghostState === (editor.state as any).doc) return;
+    const suggestion = suggestionRef.current;
+    if (!suggestion) return;
 
-    // Ghost text decorations contain the suggestion — inserting at cursor
-    // The actual accept logic depends on the decoration widget's text content
-    // For now, clear the ghost text (actual insertion would read from decoration)
-    const tr = editor.state.tr.setMeta(GhostTextPluginKey, null);
-    editor.view.dispatch(tr);
+    // Insert the ghost text suggestion at the recorded position
+    const insertTr = editor.state.tr.insertText(suggestion.text, suggestion.pos);
+    // Clear ghost text decoration via meta on the same transaction
+    insertTr.setMeta(GhostTextPluginKey, null);
+    editor.view.dispatch(insertTr);
+    suggestionRef.current = null;
   }, [editor]);
 
   const dismiss = useCallback(() => {
     if (!editor) return;
+    suggestionRef.current = null;
     const tr = editor.state.tr.setMeta(GhostTextPluginKey, null);
     editor.view.dispatch(tr);
   }, [editor]);
