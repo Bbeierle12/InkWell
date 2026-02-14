@@ -590,7 +590,7 @@ describe('1.1 Document Schema Validation', () => {
         expect(isValid(d)).toBe(true);
 
         const children: Node[] = [];
-        d.forEach((child) => children.push(child));
+        d.forEach((child: Node) => children.push(child));
         expect(children[0].attrs.level).toBe(1);
         expect(children[1].attrs.level).toBe(2);
         expect(children[2].attrs.level).toBe(3);

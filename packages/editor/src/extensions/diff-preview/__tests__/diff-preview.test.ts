@@ -93,21 +93,6 @@ function createDiffPreviewPlugin(): Plugin {
             }
           }
 
-          // Add toolbar widget
-          if (instructions.length > 0) {
-            decorations.push(
-              Decoration.widget(
-                instructions[0].range.from,
-                () => {
-                  const toolbar = document.createElement('div');
-                  toolbar.className = 'inkwell-diff-toolbar';
-                  return toolbar;
-                },
-                { side: -1 },
-              ),
-            );
-          }
-
           return {
             active: true,
             instructions,
@@ -166,7 +151,7 @@ describe('Diff Preview', () => {
     expect(pluginState.active).toBe(true);
 
     const decos = pluginState.decorations.find();
-    // Should have: 1 inline deletion + 1 toolbar widget = 2
+    // Should have: 1 inline deletion
     const inlineDecos = decos.filter((d) => (d as any).type?.attrs?.class === 'inkwell-diff-delete');
     expect(inlineDecos.length).toBe(1);
     expect(inlineDecos[0].from).toBe(1);
@@ -187,8 +172,8 @@ describe('Diff Preview', () => {
     expect(pluginState.active).toBe(true);
 
     const decos = pluginState.decorations.find();
-    // Should have: 1 insert widget + 1 toolbar widget = 2
-    expect(decos.length).toBe(2);
+    // Should have: 1 insert widget
+    expect(decos.length).toBe(1);
   });
 
   it('should render replace as both deletion and insertion decorations', () => {
@@ -205,7 +190,7 @@ describe('Diff Preview', () => {
     expect(pluginState.active).toBe(true);
 
     const decos = pluginState.decorations.find();
-    // Should have: 1 inline delete + 1 insert widget + 1 toolbar widget = 3
+    // Should have: 1 inline delete + 1 insert widget = 2
     const deleteDecos = decos.filter((d) => (d as any).type?.attrs?.class === 'inkwell-diff-delete');
     expect(deleteDecos.length).toBe(1);
   });
@@ -295,26 +280,5 @@ describe('Diff Preview', () => {
     pluginState = DiffPreviewPluginKey.getState(state) as DiffPreviewPluginState;
     expect(pluginState.active).toBe(false);
     expect(pluginState.decorations).toBe(DecorationSet.empty);
-  });
-
-  it('should render floating toolbar widget', () => {
-    let state = createState();
-
-    const instructions: AIEditInstruction[] = [
-      { type: 'delete', range: { from: 1, to: 6 } },
-    ];
-
-    const tr = state.tr.setMeta(DiffPreviewPluginKey, { instructions });
-    state = state.apply(tr);
-
-    const pluginState = DiffPreviewPluginKey.getState(state) as DiffPreviewPluginState;
-    const decos = pluginState.decorations.find();
-
-    // Find the toolbar widget (has side: -1)
-    const toolbarDecos = decos.filter((d) => {
-      // Widget decorations have a `spec` with `side`
-      return (d as any).spec?.side === -1;
-    });
-    expect(toolbarDecos.length).toBe(1);
   });
 });
