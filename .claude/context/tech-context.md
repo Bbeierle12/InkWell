@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T20:40:52Z
-version: 1.2
+last_updated: 2026-02-14T22:06:59Z
+version: 1.3
 author: Claude Code PM System
 ---
 
@@ -22,8 +22,11 @@ author: Claude Code PM System
 |-----------|---------|---------|
 | Next.js | ^15.1.3 | `@inkwell/web` |
 | React | ^19.0.0 | UI framework |
-| Tailwind CSS | ^4.0.0 | Styling |
+| Tailwind CSS | ^4.0.0 | Styling (via `@tailwindcss/postcss`) |
+| @tailwindcss/postcss | (latest) | PostCSS plugin (Tailwind v4 moved plugin to separate package) |
 | TipTap | ^2.11.2 | Rich text editor (ProseMirror wrapper) |
+| @tiptap/core | ^2.11.2 | TipTap core types |
+| @tauri-apps/api | (latest) | Tauri JS bridge for desktop invoke commands |
 | Y.js | ^13.6.20 | Real-time CRDT collaboration |
 | y-prosemirror | ^1.2.12 | Y.js ↔ ProseMirror binding |
 | y-indexeddb | ^9.0.12 | Offline persistence |
@@ -34,8 +37,9 @@ author: Claude Code PM System
 | Technology | Purpose |
 |-----------|---------|
 | Claude API (Sonnet/Opus) | Cloud AI operations |
-| llama.cpp | Local LLM inference (via Rust FFI) |
-| whisper.cpp | Local speech-to-text (via Rust FFI) |
+| llama-cpp-2 | ^0.1.133 — Local LLM inference (via Rust FFI, `local-llm` Cargo feature) |
+| whisper-rs | ^0.15 — Local speech-to-text (via Rust FFI, `local-stt` Cargo feature — **broken on Windows**) |
+| encoding_rs | 0.8 — UTF-8 decoding for token-to-piece conversion |
 | eventsource-parser | ^3.0.0 — SSE stream parsing |
 | Prompt caching | `cache_control: {type: "ephemeral"}` + `anthropic-beta: prompt-caching-2024-07-31` header |
 
@@ -88,6 +92,9 @@ author: Claude Code PM System
 ## Build Strategy
 
 - No pre-build step for packages (source-level imports)
-- Next.js static export (`output: 'export'`) for Tauri embedding
-- Tauri builds are separate from JS pipeline
+- Next.js static export (`output: 'export'`) for Tauri embedding — outputs to `apps/web/out/`
+- Tauri `frontendDist` points to `../../web/out` (relative to `src-tauri/`)
+- Tauri builds are separate from JS pipeline — requires `build.rs` with `tauri_build::build()`
+- Cargo features: `local-llm` (llama-cpp-2), `local-stt` (whisper-rs), `local-inference` (both)
+- LLVM/libclang required for bindgen on Windows: set `LIBCLANG_PATH="C:/Program Files/LLVM/bin"`
 - Turborepo caches typecheck and lint; tests/evals always uncached

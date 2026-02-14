@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T20:40:52Z
-version: 1.8
+last_updated: 2026-02-14T22:06:59Z
+version: 1.9
 author: Claude Code PM System
 ---
 
@@ -86,7 +86,7 @@ Y.js collaboration uses origin filtering:
 Packages point `main` and `types` to source TypeScript files (`./src/index.ts`). This avoids a build step during development — TypeScript is resolved at import time by bundlers and test runners.
 
 ### Static Export for Tauri
-Next.js is configured with `output: 'export'` to produce a static site that Tauri loads as its frontend. This means no server-side rendering — all AI operations happen client-side or through Tauri's Rust bridge.
+Next.js is configured with `output: 'export'` to produce a static site in `apps/web/out/`. Tauri's `frontendDist` is set to `../../web/out` (relative to `src-tauri/`) to load this export. This means no server-side rendering — all AI operations happen client-side or through Tauri's Rust bridge. Build order: `pnpm --filter @inkwell/web build` first, then `cargo build` in `src-tauri/`.
 
 ### Reconciler as Gatekeeper [IMPLEMENTED + ENHANCED]
 The reconciler pattern ensures AI output integrity:
@@ -119,10 +119,15 @@ AI quality is evaluated at three levels:
 
 ### 9. Trait-Based Inference Abstraction [IMPLEMENTED + TESTED]
 Local inference engines use trait-based abstraction for testability:
-- `LlmBackend` trait: `load()`, `generate()`, `unload()` — swappable between real FFI and mock
-- `SttBackend` trait: `load()`, `transcribe()`, `unload()` — same pattern for speech-to-text
+- `LlmBackend` trait: `load()`, `generate()`, `generate_streaming()`, `unload()` — swappable between real FFI and mock
+- `SttBackend` trait: `load()`, `transcribe()`, `transcribe_streaming()`, `unload()` — same pattern for speech-to-text
 - `LlamaEngine(Arc<Mutex<LlamaInner>>)` wraps `Box<dyn LlmBackend>` with thread-safe state machine
 - `WhisperEngine(Arc<Mutex<WhisperInner>>)` wraps `Box<dyn SttBackend>` with audio validation
+- `RealLlmBackend` (behind `local-llm` feature): llama-cpp-2 v0.1.133 FFI with `LlamaSampler` chain (temp/top_p/dist or greedy), `LlamaBatch` for prompt evaluation
+- `RealSttBackend` (behind `local-stt` feature): whisper-rs for speech-to-text (currently broken on Windows)
+- `StubLlmBackend` / `StubSttBackend`: returns helpful error messages when features not enabled
+- Granular Cargo features: `local-llm` (just LLM), `local-stt` (just STT), `local-inference` (both)
+- `lib.rs` uses independent `#[cfg(feature = "local-llm")]` / `#[cfg(feature = "local-stt")]` guards for `create_app_state()`
 - Path validation before FFI: file exists + correct extension (.gguf / .bin)
 - Audio validation before FFI: empty, too short (<100ms), NaN/Inf, too long (>10min)
 - `MockLlmBackend` / `MockSttBackend` with atomic counters and configurable errors (19 + 18 tests)

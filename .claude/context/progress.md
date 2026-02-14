@@ -1,15 +1,15 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T21:14:34Z
-version: 2.0
+last_updated: 2026-02-14T22:06:59Z
+version: 2.1
 author: Claude Code PM System
 ---
 
 # Progress: Inkwell
 
-## Current Status: Implementation Phase 5 — Claude API Integration Complete
+## Current Status: Desktop Runtime & Build Fixes — Local Inference Running
 
-Phases 1-5 TDD scaffolding complete. Implementation Phases 2-5 complete. Phase 5 connected the deterministic pipeline to the real Claude API: prompt templates for all 4 operations (rewrite/summarize/expand/critique), Claude client enhanced with `cache_control` + `anthropic-beta` header for prompt caching, structured response parser (stream text → `AIEditInstruction[]`), real token counting via `/v1/messages/count_tokens` API with heuristic fallback, full `DocumentAIServiceImpl` orchestration layer, SlashCommands ProseMirror extension with floating command palette, and web app wiring (Editor component, useDocumentAI/useGhostText hooks, singleton service). All 563 TypeScript tests + 57 Rust tests pass: `@inkwell/editor` (190), `@inkwell/document-ai` (285), `@inkwell/mcp-workspace` (55), `@inkwell/shared` (15), `@inkwell/evals` (18), and `inkwell-desktop` (57 Rust).
+Phases 1-5 TDD scaffolding and implementation complete. This session focused on getting the Tauri desktop app running with local LLM inference. Key fixes: installed LLVM/libclang for bindgen FFI generation, updated `llama-cpp-2` crate usage to v0.1.133 API (new `LlamaSampler` chain, `LlamaBatch` module path, `token_to_piece` replacing deprecated `token_to_str`), split `local-inference` Cargo feature into granular `local-llm`/`local-stt` (whisper-rs has Windows cross-compilation issues), added missing Tauri `build.rs` and window icon, fixed `frontendDist` path to point at Next.js static export (`../../web/out`), installed `@tailwindcss/postcss` for Tailwind CSS v4 compatibility, and added missing `@tauri-apps/api`/`@tiptap/core` web dependencies. All 73 Rust tests pass with `local-llm` feature enabled. Next.js static export builds successfully. Desktop app launches with real frontend.
 
 ## Completed Work
 
@@ -252,23 +252,26 @@ Phases 1-5 TDD scaffolding complete. Implementation Phases 2-5 complete. Phase 5
 
 ## Git Status
 
-- Git repository initialized, 6 commits on `main` branch
+- Git repository initialized, 8 commits on `main` branch
 - Working tree clean — all phases committed
 
 ## Immediate Next Steps
 
-1. **E2E tests** (Playwright) — critical editing flows, AI flows, offline/online transitions
-2. **Performance benchmarks** — TTFT targets, input latency, bridge throughput
-3. **Tier 2/3 evals** — Local 8B judge + Claude-as-judge implementations
-4. **Manual E2E test** — `.env.local` with API key → `pnpm dev` → test slash commands end-to-end
-5. **TypeScript typecheck cleanup** — Fix editor/document-ai vitest globals in tsconfig
+1. **Download GGUF model** — Place a `.gguf` model file in `apps/desktop/src-tauri/models/` and load via `load_llm_model` bridge command
+2. **E2E tests** (Playwright) — critical editing flows, AI flows, offline/online transitions
+3. **Performance benchmarks** — TTFT targets, input latency, bridge throughput
+4. **Tier 2/3 evals** — Local 8B judge + Claude-as-judge implementations
+5. **Fix whisper-rs Windows build** — `whisper-rs-sys` bundled bindings are Linux-specific; needs MSVC include paths for fresh bindgen
+6. **TypeScript typecheck cleanup** — Fix editor/document-ai vitest globals in tsconfig
 
 ## Known Issues
 
 - Audio fixtures are binary WAV files (RIFF headers present)
-- Tauri `#[tauri::command]` handlers return `MODEL_NOT_LOADED` until engine state management is wired up
+- Tauri `#[tauri::command]` handlers return `MODEL_NOT_LOADED` until a GGUF model is loaded via bridge command
 - TypeScript typecheck has pre-existing failures in editor/document-ai packages (vitest globals not in tsconfig — tests still pass)
 - sqlite-vec native extension may not load on Windows — VectorStore falls back to non-vector search
+- `whisper-rs` v0.15 / `whisper-rs-sys` v0.14 fails to build on Windows — bundled bindings reference Linux-only types (`_G_fpos_t`, `_IO_FILE`); `local-stt` feature is currently unbuildable on Windows without MSVC dev shell for fresh bindgen
+- Tailwind CSS v4 requires `@tailwindcss/postcss` instead of `tailwindcss` as PostCSS plugin
 
 ## Update History
 - 2026-02-14T01:00:04Z: Phase 1 TDD complete — 247 tests passing, 8 invariants covered
@@ -281,3 +284,4 @@ Phases 1-5 TDD scaffolding complete. Implementation Phases 2-5 complete. Phase 5
 - 2026-02-14T19:47:43Z: Implementation Phase 4 complete — 593 tests (536 TS + 57 Rust), Edit reconciler enhanced (typed results, overlap detection, stale-deleted, schema validation, diff preview)
 - 2026-02-14T20:40:52Z: Implementation Phase 5 complete — 620 tests (563 TS + 57 Rust), Claude API integration (prompt templates, response parser, DocumentAIServiceImpl, slash commands, web app wiring)
 - 2026-02-14T21:14:34Z: All phases committed to main (6 commits). Working tree clean. Ready for E2E/eval phase.
+- 2026-02-14T22:06:59Z: Desktop runtime session — Fixed Tailwind v4 PostCSS plugin, updated llama-cpp-2 to v0.1.133 API, split Cargo features (local-llm/local-stt), added build.rs/icon/frontendDist path fix, installed LLVM for bindgen. 73 Rust tests pass. Desktop app launches with real Next.js frontend.

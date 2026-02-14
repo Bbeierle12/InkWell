@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T20:40:52Z
-version: 1.7
+last_updated: 2026-02-14T22:06:59Z
+version: 1.8
 author: Claude Code PM System
 ---
 
@@ -113,14 +113,17 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │   │
 │   └── desktop/                 # @inkwell/desktop (Tauri)
 │       ├── src-tauri/
+│       │   ├── build.rs         # tauri_build::build()
+│       │   ├── Cargo.toml       # Features: local-llm, local-stt, local-inference
+│       │   ├── icons/icon.ico   # Windows application icon
 │       │   ├── src/
 │       │   │   ├── main.rs      # Binary entry
-│       │   │   ├── lib.rs       # Tauri setup + command registration
-│       │   │   ├── inference/   # LlamaEngine, WhisperEngine
+│       │   │   ├── lib.rs       # Tauri setup + command registration (granular cfg gates)
+│       │   │   ├── inference/   # LlamaEngine, WhisperEngine, RealLlmBackend, RealSttBackend
 │       │   │   ├── bridge/      # Tauri invoke commands
 │       │   │   └── tests/       # Integration test stubs
 │       │   └── benches/         # Criterion benchmarks
-│       └── tauri.conf.json
+│       └── tauri.conf.json      # frontendDist: ../../web/out
 │
 ├── evals/                       # @inkwell/evals (18 tests)
 │   └── src/
