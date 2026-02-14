@@ -18,7 +18,9 @@ tauri-build = { version = "2", features = [] }
 
 [features]
 default = []
-local-inference = ["llama-cpp-2", "whisper-rs"]
+local-inference = ["local-llm", "local-stt"]
+local-llm = ["llama-cpp-2"]
+local-stt = ["whisper-rs"]
 
 [dependencies]
 tauri = { version = "2", features = [] }
@@ -26,7 +28,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 llama-cpp-2 = { version = "0.1", optional = true }
-whisper-rs = { version = "0.12", optional = true }
+encoding_rs = "0.8"
+whisper-rs = { version = "0.15", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

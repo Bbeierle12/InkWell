@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "identifier": "com.inkwell.desktop",
   "build": {
-    "frontendDist": "../out"
+    "frontendDist": "../../web/out"
   },
   "app": {
     "windows": [

@@ -27,26 +27,33 @@ pub struct AppState {
 /// Without: uses stub backends that return helpful error messages.
 #[cfg(not(test))]
 fn create_app_state() -> AppState {
-    #[cfg(feature = "local-inference")]
-    {
-        use inference::llama_backend::RealLlmBackend;
-        use inference::whisper_backend::RealSttBackend;
-
-        AppState {
-            llm: Arc::new(LlamaEngine::new(Box::new(RealLlmBackend::new()))),
-            stt: Arc::new(WhisperEngine::new(Box::new(RealSttBackend::new()))),
+    let llm = {
+        #[cfg(feature = "local-llm")]
+        {
+            use inference::llama_backend::RealLlmBackend;
+            Arc::new(LlamaEngine::new(Box::new(RealLlmBackend::new())))
         }
-    }
-    #[cfg(not(feature = "local-inference"))]
-    {
-        use inference::StubLlmBackend;
-        use inference::StubSttBackend;
-
-        AppState {
-            llm: Arc::new(LlamaEngine::new(Box::new(StubLlmBackend))),
-            stt: Arc::new(WhisperEngine::new(Box::new(StubSttBackend))),
+        #[cfg(not(feature = "local-llm"))]
+        {
+            use inference::StubLlmBackend;
+            Arc::new(LlamaEngine::new(Box::new(StubLlmBackend)))
         }
-    }
+    };
+
+    let stt = {
+        #[cfg(feature = "local-stt")]
+        {
+            use inference::whisper_backend::RealSttBackend;
+            Arc::new(WhisperEngine::new(Box::new(RealSttBackend::new())))
+        }
+        #[cfg(not(feature = "local-stt"))]
+        {
+            use inference::StubSttBackend;
+            Arc::new(WhisperEngine::new(Box::new(StubSttBackend)))
+        }
+    };
+
+    AppState { llm, stt }
 }
 
 #[cfg(not(test))]

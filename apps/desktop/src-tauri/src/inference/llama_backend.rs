@@ -1,6 +1,6 @@
 //! Real LLM backend powered by llama-cpp-2 crate.
 //!
-//! This module is only compiled when the `local-inference` feature is enabled.
+//! This module is only compiled when the `local-llm` feature is enabled.
 //! It provides `RealLlmBackend` which implements `LlmBackend` via llama.cpp FFI.
 
 use std::sync::Mutex;
@@ -8,8 +8,10 @@ use std::time::Instant;
 
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend as LlamaCppBackend;
+use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::LlamaModel;
+use llama_cpp_2::sampling::LlamaSampler;
 
 use super::{GenerationParams, GenerationResult, InferenceError, LlmBackend, ModelMetadata};
 
@@ -46,12 +48,7 @@ impl LlmBackend for RealLlmBackend {
         })?;
 
         let ctx_params = LlamaContextParams::default();
-        let n_ctx = ctx_params.n_ctx();
-
-        let metadata = model.file_metadata();
-        let name = metadata
-            .and_then(|m| m.get("general.name").cloned())
-            .unwrap_or_else(|| "unknown".to_string());
+        let n_ctx = ctx_params.n_ctx().map(|v| v.get()).unwrap_or(2048);
 
         let file_size = std::fs::metadata(path)
             .map(|m| m.len())
@@ -68,7 +65,7 @@ impl LlmBackend for RealLlmBackend {
         })? = Some(loaded);
 
         Ok(ModelMetadata {
-            name,
+            name: "llama".to_string(),
             size_bytes: file_size,
             context_length: Some(n_ctx as usize),
         })
@@ -134,15 +131,24 @@ impl LlmBackend for RealLlmBackend {
                 InferenceError::InferenceFailed(format!("Tokenization failed: {}", e))
             })?;
 
-        // Evaluate prompt tokens
-        ctx.decode(&mut llama_cpp_2::context::params::LlamaBatch::get_one(
-            &tokens,
-            0,
-            false,
-        ))
-        .map_err(|e| {
+        // Evaluate prompt tokens via batch
+        let mut batch = LlamaBatch::get_one(&tokens).map_err(|e| {
+            InferenceError::InferenceFailed(format!("Batch creation failed: {}", e))
+        })?;
+        ctx.decode(&mut batch).map_err(|e| {
             InferenceError::InferenceFailed(format!("Prompt evaluation failed: {}", e))
         })?;
+
+        // Build sampler chain
+        let mut sampler = if params.temperature <= 0.0 {
+            LlamaSampler::greedy()
+        } else {
+            LlamaSampler::chain_simple([
+                LlamaSampler::temp(params.temperature),
+                LlamaSampler::top_p(params.top_p, 1),
+                LlamaSampler::dist(42),
+            ])
+        };
 
         let start = Instant::now();
         let mut first_token_time: Option<Instant> = None;
@@ -151,24 +157,16 @@ impl LlmBackend for RealLlmBackend {
 
         // Generate tokens
         for _i in 0..params.max_tokens {
-            let candidates = ctx.candidates_ith(tokens.len() as i32 + generated_count as i32 - 1);
-
-            // Apply temperature and top-p sampling
-            let token_id = if params.temperature <= 0.0 {
-                candidates.sample_token_greedy()
-            } else {
-                candidates
-                    .sample_temp(params.temperature)
-                    .sample_top_p(params.top_p, 1)
-                    .sample_token()
-            };
+            let token_id = sampler.sample(&ctx, -1);
+            sampler.accept(token_id);
 
             // Check for EOS
             if token_id == loaded.model.token_eos() {
                 break;
             }
 
-            let token_str = loaded.model.token_to_str(token_id).map_err(|e| {
+            let mut decoder = encoding_rs::UTF_8.new_decoder();
+            let token_str = loaded.model.token_to_piece(token_id, &mut decoder, false, None).map_err(|e| {
                 InferenceError::InferenceFailed(format!("Token decode failed: {}", e))
             })?;
 
@@ -190,12 +188,16 @@ impl LlmBackend for RealLlmBackend {
             }
 
             // Evaluate the new token
-            ctx.decode(&mut llama_cpp_2::context::params::LlamaBatch::get_one(
-                &[token_id],
-                tokens.len() as i32 + generated_count as i32 - 1,
-                false,
-            ))
-            .map_err(|e| {
+            let mut next_batch = LlamaBatch::new(1, 1);
+            next_batch.add(
+                token_id,
+                (tokens.len() + generated_count) as i32 - 1,
+                &[0],
+                true,
+            ).map_err(|e| {
+                InferenceError::InferenceFailed(format!("Batch add failed: {}", e))
+            })?;
+            ctx.decode(&mut next_batch).map_err(|e| {
                 InferenceError::InferenceFailed(format!("Token evaluation failed: {}", e))
             })?;
         }

@@ -6,9 +6,9 @@
 pub mod llama;
 pub mod whisper;
 
-#[cfg(feature = "local-inference")]
+#[cfg(feature = "local-llm")]
 pub mod llama_backend;
-#[cfg(feature = "local-inference")]
+#[cfg(feature = "local-stt")]
 pub mod whisper_backend;
 
 use std::fmt;
@@ -173,7 +173,7 @@ pub struct StubLlmBackend;
 impl LlmBackend for StubLlmBackend {
     fn load(&self, _path: &str) -> Result<ModelMetadata, InferenceError> {
         Err(InferenceError::InferenceFailed(
-            "Local inference not available. Build with --features local-inference".to_string(),
+            "Local inference not available. Build with --features local-llm or --features local-inference".to_string(),
         ))
     }
 
@@ -192,7 +192,7 @@ pub struct StubSttBackend;
 impl SttBackend for StubSttBackend {
     fn load(&self, _path: &str) -> Result<ModelMetadata, InferenceError> {
         Err(InferenceError::InferenceFailed(
-            "Local inference not available. Build with --features local-inference".to_string(),
+            "Local inference not available. Build with --features local-llm or --features local-inference".to_string(),
         ))
     }
 
