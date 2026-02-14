@@ -1,0 +1,24 @@
+{
+  "pairs": [
+    {
+      "input": "We need better error handling.",
+      "output": "Our current error handling approach needs significant improvement. Specifically, we should implement structured error types that provide clear context about what went wrong and where. Each module should define its own error enum, and we should use the Result type consistently rather than panicking on recoverable errors. Additionally, user-facing error messages should be actionable, telling users not just that something failed but what they can do about it."
+    },
+    {
+      "input": "The API is slow.",
+      "output": "The API is experiencing performance issues that impact user experience. Response times have increased notably, particularly for data-heavy endpoints. Contributing factors likely include unoptimized database queries, lack of response caching, and sequential processing of independent operations. We should profile the slowest endpoints, add database indexes where missing, implement Redis caching for frequently accessed data, and introduce parallel request processing for independent data fetches."
+    },
+    {
+      "input": "Security is important.",
+      "output": "Security must be a foundational concern throughout our development process, not an afterthought. This means implementing authentication and authorization at every API boundary, encrypting sensitive data both in transit and at rest, conducting regular dependency audits for known vulnerabilities, and following the principle of least privilege for all service accounts. We should also establish a security review process for all code changes that touch authentication, payment, or personal data handling."
+    },
+    {
+      "input": "Testing should be automated.",
+      "output": "Automated testing is essential for maintaining code quality and enabling confident deployments. We should establish a multi-layered testing strategy: unit tests for individual functions and modules, integration tests for API endpoints and database interactions, and end-to-end tests for critical user workflows. Tests should run automatically in CI on every pull request, with coverage thresholds enforced to prevent regression. Flaky tests should be quarantined and fixed promptly rather than ignored."
+    },
+    {
+      "input": "Documentation needs updating.",
+      "output": "Our documentation has fallen behind the current state of the codebase and needs a systematic refresh. API documentation should be auto-generated from code annotations to stay in sync. Architecture decision records should be written for all significant technical choices. The getting-started guide needs updating to reflect our current setup process. We should also add runbook documentation for common operational tasks and incident response procedures."
+    }
+  ]
+}

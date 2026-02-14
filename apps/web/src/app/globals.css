@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground: #171717;
+  --background: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground: #ededed;
+    --background: #0a0a0a;
+  }
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Ghost text decoration styling */
+.inkwell-ghost-text {
+  opacity: 0.4;
+  font-style: italic;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Diff preview styling */
+.inkwell-diff-deletion {
+  text-decoration: line-through;
+  color: #ef4444;
+  background-color: #fef2f2;
+}
+
+.inkwell-diff-addition {
+  text-decoration: underline;
+  color: #22c55e;
+  background-color: #f0fdf4;
+}

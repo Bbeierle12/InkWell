@@ -1,0 +1,14 @@
+{
+  "id": "msg_fixture_critique",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"observations\":[\"The proposal lacks specific timeline milestones\",\"Budget allocation is not broken down by phase\",\"Risk mitigation strategies are mentioned but not detailed\"],\"suggestions\":[\"Add a Gantt chart with quarterly milestones\",\"Break budget into per-phase allocations with contingency\",\"Create a risk register with probability and impact scores\",\"Include stakeholder sign-off checkpoints\"]}"
+    }
+  ],
+  "model": "claude-opus-4-6",
+  "stop_reason": "end_turn",
+  "usage": { "input_tokens": 800, "output_tokens": 120 }
+}

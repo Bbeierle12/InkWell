@@ -1,0 +1,14 @@
+{
+  "id": "msg_fixture_rewrite",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"content\":\"The quarterly results demonstrate significant growth across all key metrics, reflecting the team's focused execution on strategic priorities.\"}"
+    }
+  ],
+  "model": "claude-sonnet-4-5-20250929",
+  "stop_reason": "end_turn",
+  "usage": { "input_tokens": 150, "output_tokens": 35 }
+}

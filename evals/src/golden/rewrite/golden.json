@@ -1,0 +1,29 @@
+{
+  "pairs": [
+    {
+      "input": "The meeting was really good and we talked about a lot of things that were important.",
+      "output": "The meeting proved productive, covering several key topics of strategic importance.",
+      "style": "formal"
+    },
+    {
+      "input": "Our quarterly revenue exceeded expectations by a significant margin this period.",
+      "output": "Our quarterly revenue blew past expectations this period.",
+      "style": "casual"
+    },
+    {
+      "input": "The user interface needs improvement in several areas to enhance usability.",
+      "output": "Several UI areas need usability improvements.",
+      "style": "concise"
+    },
+    {
+      "input": "We should consider the possibility of implementing automated testing procedures.",
+      "output": "We should implement automated testing.",
+      "style": "direct"
+    },
+    {
+      "input": "The data clearly shows that customer satisfaction levels have been trending upward.",
+      "output": "Customer satisfaction has been climbing steadily, as the data confirms.",
+      "style": "narrative"
+    }
+  ]
+}

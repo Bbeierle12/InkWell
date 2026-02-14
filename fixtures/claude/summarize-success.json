@@ -1,0 +1,14 @@
+{
+  "id": "msg_fixture_summarize",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"summary\":\"The document outlines a three-phase migration plan targeting Q2 completion, with Phase 1 (data) complete, Phase 2 (deployment) in progress, and Phase 3 (training) pending.\"}"
+    }
+  ],
+  "model": "claude-sonnet-4-5-20250929",
+  "stop_reason": "end_turn",
+  "usage": { "input_tokens": 500, "output_tokens": 45 }
+}

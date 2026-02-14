@@ -1,0 +1,14 @@
+{
+  "id": "msg_fixture_expand",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"content\":\"Error handling is a critical aspect of robust software development that directly impacts reliability and user experience. A well-designed error handling strategy should encompass structured error types with clear context, consistent use of Result types over panics for recoverable errors, and actionable user-facing messages that guide resolution rather than merely reporting failure.\"}"
+    }
+  ],
+  "model": "claude-sonnet-4-5-20250929",
+  "stop_reason": "end_turn",
+  "usage": { "input_tokens": 200, "output_tokens": 80 }
+}

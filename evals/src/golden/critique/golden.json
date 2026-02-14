@@ -1,0 +1,88 @@
+{
+  "pairs": [
+    {
+      "input": "We plan to store user passwords in plain text in the database for simplicity.",
+      "output": {
+        "observations": [
+          "Storing passwords in plain text is a critical security vulnerability",
+          "This violates OWASP security guidelines and most compliance frameworks",
+          "A database breach would expose all user credentials immediately"
+        ],
+        "suggestions": [
+          "Use bcrypt, scrypt, or Argon2id for password hashing",
+          "Implement salting to prevent rainbow table attacks",
+          "Consider adding rate limiting on authentication endpoints",
+          "Plan for password rotation and breach notification procedures"
+        ]
+      }
+    },
+    {
+      "input": "Our deployment process involves manually copying files to the production server via FTP.",
+      "output": {
+        "observations": [
+          "Manual deployments are error-prone and difficult to reproduce",
+          "FTP transmits credentials and files in plain text",
+          "No rollback mechanism exists for failed deployments",
+          "No audit trail of what was deployed and when"
+        ],
+        "suggestions": [
+          "Implement a CI/CD pipeline with automated builds and deployments",
+          "Use SFTP or SCP at minimum; prefer container-based deployment",
+          "Add automated smoke tests that run after each deployment",
+          "Implement blue-green or canary deployment for zero-downtime updates"
+        ]
+      }
+    },
+    {
+      "input": "We're building a real-time chat application using HTTP polling every 500ms.",
+      "output": {
+        "observations": [
+          "Polling at 500ms creates unnecessary server load and network traffic",
+          "Messages will have up to 500ms delivery latency",
+          "This approach does not scale well with increasing user count",
+          "Battery and bandwidth impact on mobile clients will be significant"
+        ],
+        "suggestions": [
+          "Use WebSockets for bidirectional real-time communication",
+          "Consider Server-Sent Events (SSE) if only server-to-client updates are needed",
+          "Implement connection heartbeats and automatic reconnection",
+          "Add message acknowledgment to handle delivery guarantees"
+        ]
+      }
+    },
+    {
+      "input": "Our monolithic application handles 10,000 requests per second and we want to break it into microservices.",
+      "output": {
+        "observations": [
+          "10,000 RPS suggests the monolith is performing adequately",
+          "Microservices introduce network latency, operational complexity, and distributed system challenges",
+          "The migration will require significant investment in infrastructure and tooling",
+          "Team expertise in distributed systems should be evaluated"
+        ],
+        "suggestions": [
+          "Identify specific pain points the monolith creates before migrating",
+          "Consider a modular monolith as an intermediate step",
+          "Extract only the components with clear bounded contexts first",
+          "Invest in observability tooling before splitting services"
+        ]
+      }
+    },
+    {
+      "input": "We want to use a single global Redux store for all application state including form inputs and API cache.",
+      "output": {
+        "observations": [
+          "Storing all state in one Redux store leads to unnecessary re-renders",
+          "Form state is inherently local and ephemeral",
+          "API cache has different invalidation needs than UI state",
+          "The store will become increasingly difficult to debug as it grows"
+        ],
+        "suggestions": [
+          "Use local component state or a form library for form inputs",
+          "Use React Query or SWR for server state and API caching",
+          "Reserve Redux for truly global, client-side application state",
+          "Consider Zustand or Jotai for simpler global state needs"
+        ]
+      }
+    }
+  ]
+}

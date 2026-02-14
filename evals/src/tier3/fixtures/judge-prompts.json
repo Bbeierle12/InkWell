@@ -1,0 +1,9 @@
+{
+  "systemPrompt": "You are Claude, acting as an expert writing quality judge. Evaluate the AI-generated output against the golden reference. Be rigorous and specific in your assessment. Return a JSON object.",
+  "criteria": {
+    "rewrite": ["tone_preservation", "meaning_accuracy", "fluency", "conciseness", "style_match"],
+    "summarize": ["key_points_coverage", "brevity", "accuracy", "readability", "no_hallucination"],
+    "expand": ["coherence", "relevance", "depth", "style_consistency", "naturalness"],
+    "critique": ["thoroughness", "actionability", "specificity", "balance", "constructiveness"]
+  }
+}

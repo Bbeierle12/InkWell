@@ -1,0 +1,20 @@
+{
+  "name": "@inkwell/evals",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "eval:tier1": "vitest run src/tier1/",
+    "eval:tier2": "vitest run src/tier2/",
+    "eval:tier3": "vitest run src/tier3/",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@inkwell/document-ai": "workspace:*",
+    "@inkwell/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.8"
+  }
+}

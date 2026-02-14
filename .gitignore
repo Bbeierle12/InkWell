@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+target/
+dist/
+*.local
+apps/desktop/src-tauri/models/*
+!apps/desktop/src-tauri/models/.gitkeep
+coverage/
+playwright-report/
+test-results/
+.turbo/
+*.tsbuildinfo

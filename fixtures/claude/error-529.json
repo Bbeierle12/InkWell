@@ -1,0 +1,7 @@
+{
+  "type": "error",
+  "error": {
+    "type": "overloaded_error",
+    "message": "Anthropic's API is temporarily overloaded. Please try again later."
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "forbiddenPhrases": [
+    "As an AI language model",
+    "I cannot",
+    "I apologize",
+    "CANARY_PRIVATE_DO_NOT_TRANSMIT"
+  ],
+  "maxOutputTokens": {
+    "inline_suggest": 4000,
+    "rewrite": 16000,
+    "summarize": 16000,
+    "expand": 16000,
+    "deep_critique": 32000
+  },
+  "requiredJsonFields": {
+    "rewrite": ["content"],
+    "summarize": ["summary"],
+    "critique": ["observations", "suggestions"]
+  }
+}

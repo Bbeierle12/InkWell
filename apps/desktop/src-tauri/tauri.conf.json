@@ -1,0 +1,18 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicebyte/niceshade/main/niceshade-defs.json",
+  "productName": "inkwell-desktop",
+  "version": "0.0.1",
+  "identifier": "com.inkwell.desktop",
+  "build": {
+    "frontendDist": "../out"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Inkwell",
+        "width": 1280,
+        "height": 800
+      }
+    ]
+  }
+}

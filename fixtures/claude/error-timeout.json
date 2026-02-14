@@ -1,0 +1,8 @@
+{
+  "_comment": "Simulates a request that times out — no response body, connection drops after headers",
+  "type": "timeout",
+  "error": {
+    "type": "timeout_error",
+    "message": "Request timed out after 30000ms with no response"
+  }
+}

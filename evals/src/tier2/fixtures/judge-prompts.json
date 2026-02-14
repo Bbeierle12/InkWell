@@ -1,0 +1,9 @@
+{
+  "systemPrompt": "You are an expert writing evaluator. Score the given AI output against the reference on the specified criteria. Return a JSON object with score (0-10), reasoning, and per-criterion scores.",
+  "criteria": {
+    "rewrite": ["tone_preservation", "meaning_accuracy", "fluency", "conciseness"],
+    "summarize": ["key_points_coverage", "brevity", "accuracy", "readability"],
+    "expand": ["coherence", "relevance", "depth", "style_consistency"],
+    "critique": ["thoroughness", "actionability", "specificity", "balance"]
+  }
+}

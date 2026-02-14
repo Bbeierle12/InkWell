@@ -1,0 +1,10 @@
+{
+  "name": "@inkwell/desktop",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "typecheck": "echo 'Rust typecheck via cargo check'"
+  }
+}
