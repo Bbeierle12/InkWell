@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T00:11:35Z
-version: 1.0
+last_updated: 2026-02-14T17:19:48Z
+version: 1.1
 author: Claude Code PM System
 ---
 
@@ -52,8 +52,9 @@ author: Claude Code PM System
 | Technology | Version | Purpose |
 |-----------|---------|---------|
 | better-sqlite3 | ^11.7.0 | SQLite database |
-| sqlite-vec | ^0.1.6 | Vector search extension |
-| @modelcontextprotocol/sdk | ^1.4.0 | MCP protocol |
+| sqlite-vec | ^0.1.6 | Vector search extension (optional, graceful fallback) |
+| @modelcontextprotocol/sdk | ^1.26.0 | MCP protocol (McpServer, Client, InMemoryTransport) |
+| zod | ^4.3.6 | Schema validation for MCP tool inputs |
 
 ## Testing
 
@@ -66,6 +67,7 @@ author: Claude Code PM System
 | Playwright | ^1.49.1 | E2E testing |
 | jsdom | ^28.0.0 | DOM environment for editor tests |
 | prosemirror-test-builder | ^1.1.1 | ProseMirror test utilities |
+| memfs | ^4.14.1 | In-memory filesystem for FileWatcher tests |
 
 ## Dev Tooling
 

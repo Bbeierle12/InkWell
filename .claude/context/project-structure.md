@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T02:25:16Z
-version: 1.2
+last_updated: 2026-02-14T17:19:48Z
+version: 1.3
 author: Claude Code PM System
 ---
 
@@ -18,13 +18,15 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 ├── .github/workflows/            # CI: pr-gate, merge-main, nightly, weekly
 │
 ├── packages/
-│   ├── shared/                   # @inkwell/shared
+│   ├── shared/                   # @inkwell/shared (15 tests)
 │   │   └── src/
-│   │       ├── types.ts          # OperationType, ModelTarget, RoutingMode, interfaces
+│   │       ├── types.ts          # OperationType, ModelTarget, RoutingMode, MCP types, Voice enums
 │   │       ├── constants.ts      # PRIVACY_CANARY, TOKEN_BUDGETS, thresholds, INVARIANT_IDS
+│   │       ├── voice-pipeline.ts # FSM transition table + transition() [IMPLEMENTED]
 │   │       ├── utils/
 │   │       │   ├── levenshtein.ts  # Edit distance + ratio
 │   │       │   └── hash.ts        # SHA-256 content hashing
+│   │       ├── __tests__/        # voice-pipeline.test.ts (10), utils.test.ts (5)
 │   │       └── index.ts          # Barrel exports
 │   │
 │   ├── editor/                   # @inkwell/editor (181 tests)
@@ -58,12 +60,25 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │   │       ├── test-setup.ts    # MSW server + privacy canary interceptor
 │   │       └── types.ts         # DocumentAIService interface
 │   │
-│   └── mcp-workspace/           # @inkwell/mcp-workspace
+│   └── mcp-workspace/           # @inkwell/mcp-workspace (55 tests)
 │       └── src/
-│           ├── server.ts         # MCP server factory
-│           ├── tools/            # 4 MCP tools (search, watch, analyze, style-guide)
-│           ├── indexer/          # File watcher, chunker, vector store
-│           └── protocol/         # MCP adapter
+│           ├── server.ts         # MCP server factory (McpServer + 4 tools) [IMPLEMENTED]
+│           ├── tools/            # 4 MCP tools [IMPLEMENTED]
+│           │   ├── workspace-search.ts    # Vector search with simpleEmbed
+│           │   ├── workspace-watch.ts     # FileWatcher delegation
+│           │   ├── document-analyze.ts    # Text structure analysis
+│           │   ├── document-style-guide.ts # Style heuristics
+│           │   └── __tests__/tools.test.ts (10)
+│           ├── indexer/          # [IMPLEMENTED]
+│           │   ├── chunker.ts             # Sliding window chunking
+│           │   ├── vector-store.ts        # SQLite + sqlite-vec (graceful fallback)
+│           │   ├── file-watcher.ts        # Injectable fs module
+│           │   └── __tests__/   # chunker (8), vector-store (9), file-watcher (6), indexer (4), retrieval (3)
+│           ├── protocol/         # [IMPLEMENTED]
+│           │   ├── adapter.ts             # MCP version + JSON-RPC validation
+│           │   └── __tests__/   # adapter (6), compliance (4)
+│           ├── __tests__/server.test.ts (5)
+│           └── index.ts          # Expanded barrel exports
 │
 ├── apps/
 │   ├── web/                     # @inkwell/web (Next.js 15)
@@ -84,13 +99,14 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │       │   └── benches/         # Criterion benchmarks
 │       └── tauri.conf.json
 │
-├── evals/                       # @inkwell/evals
+├── evals/                       # @inkwell/evals (16 tests)
 │   └── src/
-│       ├── tier1/               # Structural checks (regex, JSON validation)
-│       ├── tier2/               # Local 8B judge
-│       ├── tier3/               # Claude-as-judge
-│       ├── golden/              # Reference outputs (rewrite, summarize, expand, critique)
-│       └── compare.ts           # Similarity scoring
+│       ├── compare.ts           # Similarity scoring (exactMatch, cosine, BLEU-4, ROUGE-L) [IMPLEMENTED]
+│       ├── compare.test.ts      # 12 tests
+│       ├── tier1/               # Structural checks [IMPLEMENTED] — structural.test.ts (4)
+│       ├── tier2/               # Local 8B judge (stub)
+│       ├── tier3/               # Claude-as-judge (stub)
+│       └── golden/              # Reference outputs (rewrite, summarize, expand, critique)
 │
 ├── e2e/                         # @inkwell/e2e (Playwright)
 │   └── tests/                   # editing-flows, ai-flows, offline-online, performance

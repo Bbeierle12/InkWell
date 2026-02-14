@@ -1,15 +1,15 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T02:44:00Z
-version: 1.4
+last_updated: 2026-02-14T17:19:48Z
+version: 1.5
 author: Claude Code PM System
 ---
 
 # Progress: Inkwell
 
-## Current Status: TDD Phase 4 Complete
+## Current Status: TDD Phase 5 Complete
 
-Phases 1-4 of the TDD workflow are complete. All 418 tests pass: `@inkwell/editor` (181 TS tests), `@inkwell/document-ai` (180 TS tests), and `inkwell-desktop` (57 Rust tests). Phase 4 replaced all TODO test stubs in the Rust desktop crate with real assertions and implemented the local inference layer.
+Phases 1-5 of the TDD workflow are complete. All 447 TypeScript tests + 57 Rust tests pass: `@inkwell/editor` (181), `@inkwell/document-ai` (180), `@inkwell/mcp-workspace` (55), `@inkwell/shared` (15), `@inkwell/evals` (16), and `inkwell-desktop` (57 Rust). Phase 5 implemented the MCP workspace context layer, evaluation system, and voice pipeline state machine.
 
 ## Completed Work
 
@@ -147,35 +147,66 @@ Phases 1-4 of the TDD workflow are complete. All 418 tests pass: `@inkwell/edito
 - Created VCR fixtures, documentation (ARCHITECTURE, TEST-PLAN, INVARIANTS, PROMPTS)
 - Post-scaffolding fixes: workspace deps, tsconfig, jsdom, shared test file
 
+### TDD Phase 5 — MCP Workspace + Evals + Voice Pipeline (2026-02-14)
+
+**Section A: Shared Types + Voice Pipeline (15 tests in shared)**
+- Added MCP types: `SearchResult`, `AnalysisResult`, `StyleGuideResult`, `MCPServerConfig`
+- Added voice pipeline types: `VoicePipelineState`, `VoicePipelineEvent`, `VoicePipelineContext`, `VoicePipelineTransition`
+- Voice pipeline FSM: transition table + `transition()` function
+- 10 voice pipeline tests: happy path (Idle→Recording→Transcribing→Refining→Done), error transitions, reset, invalid transitions
+
+**Section B: Evals (16 tests)**
+- `compare.ts`: exactMatch, cosineSimilarity (bag-of-words TF), bleuScore (modified BLEU-4), rougeL (LCS F1), overallScore (weighted 0.1/0.3/0.3/0.3)
+- 12 compare tests covering all metrics and edge cases
+- 4 structural eval tests (Tier 1): JSON output validation, forbidden phrase detection, token budget enforcement, markdown structure preservation
+
+**Section C: MCP Workspace (55 tests across 9 test files)**
+- Chunker: sliding window with configurable overlap (8 tests)
+- VectorStore: SQLite-backed with graceful sqlite-vec fallback for Windows (9 tests)
+- FileWatcher: injectable fs module for testability (6 tests)
+- Indexer integration: real chunker + VectorStore with simpleEmbed helper (4 tests)
+- Retrieval quality: keyword/semantic search + limit enforcement (3 tests)
+- Protocol adapter: MCP version "2024-11-05" + JSON-RPC validation (6 tests)
+- Tool functions: workspace-search, workspace-watch, document-analyze, document-style-guide (10 tests)
+- MCP Server: McpServer with 4 registered tools via zod schemas (5 tests)
+- Protocol compliance: Client + InMemoryTransport end-to-end testing (4 tests)
+
 ## Verification Results
 
 | Check | Result |
 |-------|--------|
-| `pnpm install` | 463 packages installed |
+| `@inkwell/shared` tests | 15 passed (2 test files) |
 | `@inkwell/editor` tests | 181 passed (10 test files) |
 | `@inkwell/document-ai` tests | 180 passed (9 test files) |
+| `@inkwell/mcp-workspace` tests | 55 passed (9 test files) |
+| `@inkwell/evals` tests | 16 passed (2 test files) |
 | `inkwell-desktop` Rust tests | 57 passed (0 warnings) |
-| **Total tests** | **418 passed, 0 failed** |
+| **Total tests** | **504 passed, 0 failed** |
+| Typecheck (shared) | Clean |
+| Typecheck (mcp-workspace) | Clean |
+| Typecheck (evals) | Clean |
 
 ## Git Status
 
-- Not yet a git repository (no `git init` performed)
+- Git repository initialized, single commit on `main` branch
+- All changes committed, working tree clean
 
 ## Immediate Next Steps
 
-1. **TDD Phase 5** — E2E flows, MCP context layer, voice pipeline
-2. **Initialize git repository** — `git init && git add . && git commit`
+1. **TDD Phase 6** — E2E tests (Playwright), performance benchmarks, full integration
+2. **Wire up real tool implementations** in MCP server (currently delegates to pure functions)
+3. **Tier 2/3 evals** — Local judge + cloud judge implementations
 
 ## Known Issues
 
-- No git repository initialized yet
-- Remaining packages still have stub implementations (MCP)
 - Audio fixtures are binary WAV files (RIFF headers present)
 - Tauri `#[tauri::command]` handlers return `MODEL_NOT_LOADED` until engine state management is wired up
-- TypeScript typecheck has pre-existing failures in editor/document-ai packages (tests still pass)
+- TypeScript typecheck has pre-existing failures in editor/document-ai packages (vitest globals not in tsconfig — tests still pass)
+- sqlite-vec native extension may not load on Windows — VectorStore falls back to non-vector search
 
 ## Update History
 - 2026-02-14T01:00:04Z: Phase 1 TDD complete — 247 tests passing, 8 invariants covered
 - 2026-02-14T01:18:04Z: Phase 2 TDD complete — 361 tests passing, 13 invariants covered
 - 2026-02-14T02:25:16Z: Phase 3 TDD complete — 361 tests (15 stubs → real assertions), all 14 invariants covered
 - 2026-02-14T02:44:00Z: Phase 4 TDD complete — 418 tests (361 TS + 57 Rust), local inference layer implemented
+- 2026-02-14T17:19:48Z: Phase 5 TDD complete — 504 tests (447 TS + 57 Rust), MCP workspace + evals + voice pipeline

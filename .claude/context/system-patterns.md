@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T02:44:00Z
-version: 1.3
+last_updated: 2026-02-14T17:19:48Z
+version: 1.4
 author: Claude Code PM System
 ---
 
@@ -82,11 +82,12 @@ The reconciler pattern ensures AI output integrity:
 - `Reconciler.apply()` sorts end-to-start, applies via ProseMirror `doc.replace()`
 - Rejects entirely on validation failure — no partial edits (Invariant #12 — 45 tests)
 
-### 3-Tier Eval System
+### 3-Tier Eval System [TIER 1 IMPLEMENTED + TESTED]
 AI quality is evaluated at three levels:
-- **Tier 1 (Structural)**: Fast regex/JSON checks at PR gate
-- **Tier 2 (Local Judge)**: 8B model evaluates quality locally
-- **Tier 3 (Cloud Judge)**: Claude evaluates quality (expensive, merge-only)
+- **Tier 1 (Structural)** [IMPLEMENTED]: Fast regex/JSON checks at PR gate — forbidden phrase detection, JSON schema validation, token budget enforcement, structure preservation (4 tests)
+- **Tier 2 (Local Judge)**: 8B model evaluates quality locally (stub)
+- **Tier 3 (Cloud Judge)**: Claude evaluates quality (expensive, merge-only) (stub)
+- **Comparison metrics** [IMPLEMENTED]: exactMatch, cosineSimilarity (bag-of-words TF), bleuScore (BLEU-4), rougeL (LCS F1), overallScore (weighted) — 12 tests
 
 ### 9. Trait-Based Inference Abstraction [IMPLEMENTED + TESTED]
 Local inference engines use trait-based abstraction for testability:
@@ -105,6 +106,29 @@ Tauri bridge commands validate before processing:
 - Validation runs before any engine access — fail fast at the boundary
 - All bridge types implement `Serialize + Deserialize + PartialEq` for roundtrip testing
 - `cfg(test)` guard on `tauri::generate_context!()` — enables `cargo test` without Tauri frontend build (24 tests)
+
+### 11. MCP Workspace Server [IMPLEMENTED + TESTED]
+MCP workspace context layer provides AI with document awareness:
+- `McpServer` from MCP SDK with 4 registered tools via zod schemas (5 tests)
+- `workspace-search`: bag-of-words embedding → VectorStore.search() → SearchResult[] (3 tests)
+- `workspace-watch`: FileWatcher delegation for directory monitoring (2 tests)
+- `document-analyze`: pure text analysis (word/sentence/paragraph counts, headings, reading level) (3 tests)
+- `document-style-guide`: heuristic tone/formality/vocabulary detection (2 tests)
+- Protocol compliance tested with Client + InMemoryTransport (4 tests)
+
+### 12. Document Chunking + Vector Search [IMPLEMENTED + TESTED]
+Documents are split and indexed for retrieval:
+- `chunkDocument()`: sliding window with configurable overlap (default 500 chars, 50 overlap) (8 tests)
+- `VectorStore`: SQLite-backed with optional sqlite-vec extension; graceful fallback on Windows (9 tests)
+- `simpleEmbed()`: bag-of-words hash → 384-dim normalized vector for testing
+- `FileWatcher`: injectable fs module via constructor for testability (6 tests)
+
+### 13. Voice Pipeline FSM [IMPLEMENTED + TESTED]
+Voice-to-text pipeline uses a finite state machine:
+- States: Idle → Recording → Transcribing → Refining → Done (happy path)
+- Any state → Error on ErrorOccurred; Error/Done → Idle on Reset
+- `transition(current, event)` returns `VoicePipelineTransition | null` for invalid transitions
+- 10 tests covering all valid transitions and invalid event rejection
 
 ## Data Flow
 

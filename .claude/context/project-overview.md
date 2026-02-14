@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T02:25:16Z
-version: 1.2
+last_updated: 2026-02-14T17:19:48Z
+version: 1.3
 author: Claude Code PM System
 ---
 
@@ -31,12 +31,14 @@ inkwell/
 
 ## Current State
 
-- **Phase**: TDD Phase 3 complete (Editor Core + Router + DocumentAI Runtime + Claude API)
-- **Files**: ~150 source files + 19 test files with real assertions
-- **Tests**: 361 tests passing (181 editor + 180 document-ai)
-- **Implementations**: Schema, router, AI undo, ghost text, collaboration, origin filter, queue manager, context manager, reconciler, Claude streaming client, SSE parser, token counter
-- **Typecheck**: Passes across all 7 packages
-- **Dependencies**: 463 npm packages installed
+- **Phase**: TDD Phase 5 complete (Editor + DocumentAI + Local Inference + MCP Workspace + Evals + Voice)
+- **Files**: ~170 source files + 32 test files with real assertions
+- **Tests**: 504 tests passing (447 TS + 57 Rust)
+  - `@inkwell/shared`: 15 | `@inkwell/editor`: 181 | `@inkwell/document-ai`: 180
+  - `@inkwell/mcp-workspace`: 55 | `@inkwell/evals`: 16 | Rust: 57
+- **Implementations**: Schema, router, AI undo, ghost text, collaboration, origin filter, queue manager, context manager, reconciler, Claude streaming client, SSE parser, token counter, MCP server (4 tools), document chunker, vector store, file watcher, protocol adapter, eval comparison metrics, voice pipeline FSM, local inference engines (llama/whisper), bridge validators
+- **Typecheck**: Clean for shared, mcp-workspace, evals packages
+- **Dependencies**: 463+ npm packages installed (+ zod v4 for MCP)
 
 ## Integration Points
 
