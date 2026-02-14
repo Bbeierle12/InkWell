@@ -150,6 +150,78 @@ describe('1.2 AI Undo Atomicity', () => {
   });
 
   // -----------------------------------------------------------------
+  // Selective undo: User A → AI B (50 chunks) → User C
+  // Ref: Phase 2 Task 2.2
+  // Uses a multi-paragraph document with edits at distant positions
+  // to ensure ProseMirror's history plugin creates separate undo groups.
+  // -----------------------------------------------------------------
+  it('should selectively undo user C, then AI B, preserving A', () => {
+    // Start with a 3-paragraph document to allow distant edit positions
+    const doc = inkwellSchema.node('doc', null, [
+      inkwellSchema.node('paragraph', null, [inkwellSchema.text('First paragraph content')]),
+      inkwellSchema.node('paragraph', null, [inkwellSchema.text('Second paragraph content')]),
+      inkwellSchema.node('paragraph', null, [inkwellSchema.text('Third paragraph content')]),
+    ]);
+    let state = EditorState.create({
+      doc,
+      schema: inkwellSchema,
+      plugins: [history({ newGroupDelay: 0 })],
+    });
+
+    // Edit A: user types at position 1 (beginning of first paragraph)
+    const trA = state.tr.insertText('UserA ', 1);
+    state = state.apply(trA);
+    const afterA = state.doc;
+    expect(undoDepth(state)).toBe(1);
+
+    // Edit B: AI applies 50 chunks (appends to end of last paragraph)
+    state = performAIOperation(state, 50, 'ai');
+    const afterB = state.doc;
+    expect(undoDepth(state)).toBe(2); // A + B
+
+    // Edit C: user types at position 1 (beginning of first paragraph)
+    // The AIOperationSession.commit() closes the history group, so this
+    // edit starts a new undo entry.
+    const trC = state.tr.insertText('UserC ', 1);
+    state = state.apply(trC);
+    expect(undoDepth(state)).toBe(3); // A + B + C
+
+    // Undo once: should reverse only edit C
+    undo(state, (tr) => { state = state.apply(tr); });
+    expect(state.doc.eq(afterB)).toBe(true);
+    expect(undoDepth(state)).toBe(2);
+
+    // Undo again: should reverse entire AI edit B as one unit
+    undo(state, (tr) => { state = state.apply(tr); });
+    expect(state.doc.eq(afterA)).toBe(true);
+    expect(undoDepth(state)).toBe(1);
+  });
+
+  // -----------------------------------------------------------------
+  // Redo consistency after undoing AI edit
+  // Ref: Phase 2 Task 2.2
+  // -----------------------------------------------------------------
+  it('should redo AI edit atomically after undo', () => {
+    let state = createState();
+
+    // User edit
+    const tr = state.tr.insertText('prefix', 1);
+    state = state.apply(tr);
+
+    // AI operation
+    state = performAIOperation(state, 50, 'chunk');
+    const postAIDoc = state.doc;
+
+    // Undo the AI edit
+    undo(state, (tr) => { state = state.apply(tr); });
+    expect(state.doc.eq(postAIDoc)).toBe(false);
+
+    // Redo should restore the entire AI edit atomically
+    redo(state, (tr) => { state = state.apply(tr); });
+    expect(state.doc.eq(postAIDoc)).toBe(true);
+  });
+
+  // -----------------------------------------------------------------
   // markAsAIIntermediate meta verification
   // -----------------------------------------------------------------
   it('should set correct meta on intermediate steps', () => {

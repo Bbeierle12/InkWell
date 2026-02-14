@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T17:19:48Z
-version: 1.4
+last_updated: 2026-02-14T18:21:06Z
+version: 1.5
 author: Claude Code PM System
 ---
 
@@ -18,17 +18,20 @@ author: Claude Code PM System
 ### 2. Decoration-Based AI Rendering [IMPLEMENTED + TESTED]
 Ghost text is implemented as ProseMirror decorations, not document nodes:
 - `GhostText` TipTap extension with `GhostTextPluginKey` manages `DecorationSet`
-- AI suggestions never pollute the document model (Invariant #3 — 9 tests)
+- AI suggestions never pollute the document model (Invariant #3 — 11 tests)
 - Decorations are ephemeral — disappear on serialize
 - Stability threshold (Levenshtein ratio < 0.4) prevents flicker (Invariant #13)
 - Auto-clear on `tr.docChanged` (user typing)
+- Multiple concurrent ghost text decorations supported at different positions
+- TTFT instrumentation: `requestedAt` field in meta, `getGhostTextTTFT()` / `clearGhostTextTTFT()` API
 
 ### 3. Atomic AI Undo [IMPLEMENTED + TESTED]
 AI operations that produce multiple editor steps are wrapped to undo atomically:
-- `AIOperationSession` class captures pre-AI snapshot, applies intermediates, then two-phase commits
+- `AIOperationSession` class captures pre-AI snapshot, applies intermediates, then three-phase commits
 - Uses `markAsAIIntermediate(tr)` with `addToHistory: false` for streaming tokens
-- `commit()` reverts to pre-AI state then replaces in one history-tracked transaction
-- Results in single undo step for entire AI operation (Invariant #5 — 7 tests)
+- `commit()` Phase 1: revert to pre-AI state; Phase 2: replace in one history-tracked transaction; Phase 3: `closeHistory()` to prevent next user edit from merging with AI group
+- Results in single undo step for entire AI operation (Invariant #5 — 9 tests)
+- Selective undo verified: User A → AI B (50 chunks) → User C → undo C → undo B atomically
 
 ### 4. Request Priority Queue with Backpressure [IMPLEMENTED + TESTED]
 DocumentAI uses a priority queue for AI requests:

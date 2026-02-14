@@ -147,7 +147,7 @@ describe('1.2 Transaction Integrity — Property Tests', () => {
           }
         },
       ),
-      { numRuns: 1_000 },
+      { numRuns: 10_000 },
     );
   });
 });

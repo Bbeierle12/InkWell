@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T17:19:48Z
-version: 1.3
+last_updated: 2026-02-14T18:21:06Z
+version: 1.4
 author: Claude Code PM System
 ---
 
@@ -31,12 +31,12 @@ inkwell/
 
 ## Current State
 
-- **Phase**: TDD Phase 5 complete (Editor + DocumentAI + Local Inference + MCP Workspace + Evals + Voice)
+- **Phase**: Implementation Phase 2 complete (Editor Transaction Layer hardened)
 - **Files**: ~170 source files + 32 test files with real assertions
-- **Tests**: 504 tests passing (447 TS + 57 Rust)
-  - `@inkwell/shared`: 15 | `@inkwell/editor`: 181 | `@inkwell/document-ai`: 180
+- **Tests**: 509 tests passing (452 TS + 57 Rust)
+  - `@inkwell/shared`: 15 | `@inkwell/editor`: 186 | `@inkwell/document-ai`: 180
   - `@inkwell/mcp-workspace`: 55 | `@inkwell/evals`: 16 | Rust: 57
-- **Implementations**: Schema, router, AI undo, ghost text, collaboration, origin filter, queue manager, context manager, reconciler, Claude streaming client, SSE parser, token counter, MCP server (4 tools), document chunker, vector store, file watcher, protocol adapter, eval comparison metrics, voice pipeline FSM, local inference engines (llama/whisper), bridge validators
+- **Implementations**: Schema, router, AI undo (3-phase commit + closeHistory), ghost text (+ TTFT instrumentation), collaboration, origin filter, transaction utilities, queue manager, context manager, reconciler, Claude streaming client, SSE parser, token counter, MCP server (4 tools), document chunker, vector store, file watcher, protocol adapter, eval comparison metrics, voice pipeline FSM, local inference engines (llama/whisper), bridge validators
 - **Typecheck**: Clean for shared, mcp-workspace, evals packages
 - **Dependencies**: 463+ npm packages installed (+ zod v4 for MCP)
 

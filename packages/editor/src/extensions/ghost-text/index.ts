@@ -18,6 +18,40 @@ export interface GhostTextOptions {
 export interface GhostTextMeta {
   text: string;
   pos: number;
+  /** Optional: set to `performance.now()` to enable TTFT measurement. */
+  requestedAt?: number;
+}
+
+/**
+ * Time-to-first-token (TTFT) measurement for ghost text.
+ * Records timestamps for cursor idle → ghost text visible transitions.
+ * Access via `GhostTextPluginKey.getState(state).ttft` after instrumentation.
+ */
+export interface GhostTextTTFTEntry {
+  /** Timestamp when the ghost text transaction was dispatched. */
+  requestedAt: number;
+  /** Timestamp when the decoration was created (applied in plugin state). */
+  renderedAt: number;
+  /** TTFT in milliseconds. */
+  ttftMs: number;
+}
+
+/**
+ * TTFT measurement entries. Ghost text meta can include a `requestedAt`
+ * timestamp; when present, the plugin records the render time and adds
+ * an entry here. Read via {@link getGhostTextTTFT} and reset via
+ * {@link clearGhostTextTTFT}.
+ */
+const ttftEntries: GhostTextTTFTEntry[] = [];
+
+/** Get all recorded TTFT entries. */
+export function getGhostTextTTFT(): readonly GhostTextTTFTEntry[] {
+  return ttftEntries;
+}
+
+/** Clear all recorded TTFT entries (for testing). */
+export function clearGhostTextTTFT(): void {
+  ttftEntries.length = 0;
 }
 
 /**
@@ -27,6 +61,7 @@ export interface GhostTextMeta {
  * - Set ghost text: `tr.setMeta(GhostTextPluginKey, { text: 'suggestion', pos: cursorPos })`
  * - Clear ghost text: `tr.setMeta(GhostTextPluginKey, null)`
  * - Ghost text is automatically cleared when the document changes (user typing).
+ * - For TTFT measurement, include `requestedAt: performance.now()` in the meta.
  */
 export const GhostText = Extension.create<GhostTextOptions>({
   name: 'ghostText',
@@ -54,7 +89,7 @@ export const GhostText = Extension.create<GhostTextOptions>({
 
             // New ghost text
             if (meta && typeof meta === 'object' && 'text' in meta) {
-              const { text, pos } = meta as GhostTextMeta;
+              const { text, pos, requestedAt } = meta as GhostTextMeta;
               const widget = Decoration.widget(
                 pos,
                 () => {
@@ -65,6 +100,17 @@ export const GhostText = Extension.create<GhostTextOptions>({
                 },
                 { side: 1 },
               );
+
+              // Record TTFT if requestedAt was provided
+              if (typeof requestedAt === 'number') {
+                const renderedAt = performance.now();
+                ttftEntries.push({
+                  requestedAt,
+                  renderedAt,
+                  ttftMs: renderedAt - requestedAt,
+                });
+              }
+
               return DecorationSet.create(newState.doc, [widget]);
             }
 

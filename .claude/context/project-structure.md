@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T17:19:48Z
-version: 1.3
+last_updated: 2026-02-14T18:21:06Z
+version: 1.4
 author: Claude Code PM System
 ---
 
@@ -29,21 +29,22 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │   │       ├── __tests__/        # voice-pipeline.test.ts (10), utils.test.ts (5)
 │   │       └── index.ts          # Barrel exports
 │   │
-│   ├── editor/                   # @inkwell/editor (181 tests)
+│   ├── editor/                   # @inkwell/editor (186 tests)
 │   │   └── src/
 │   │       ├── schema/           # ProseMirror nodes + marks [IMPLEMENTED]
 │   │       │   └── __tests__/    # schema.test.ts (121), schema.property.test.ts (15)
 │   │       ├── extensions/
-│   │       │   ├── ghost-text/   # AI inline suggestion decorations [IMPLEMENTED]
-│   │       │   │   └── __tests__/ # ghost-text.test.ts (9)
-│   │       │   ├── ai-undo/     # Atomic undo for AI operations [IMPLEMENTED]
-│   │       │   │   └── __tests__/ # ai-undo.test.ts (7)
+│   │       │   ├── ghost-text/   # AI inline suggestion decorations + TTFT [IMPLEMENTED]
+│   │       │   │   └── __tests__/ # ghost-text.test.ts (11)
+│   │       │   ├── ai-undo/     # Atomic undo with closeHistory [IMPLEMENTED]
+│   │       │   │   └── __tests__/ # ai-undo.test.ts (9)
 │   │       │   ├── slash-commands/ # "/" command palette
 │   │       │   └── diff-preview/  # Before/after rendering
 │   │       ├── collaboration/    # Y.js + origin filtering [IMPLEMENTED]
 │   │       │   └── __tests__/    # origin-filter.test.ts (6), yjs-conflicts.test.ts (4)
-│   │       └── transactions/     # Integrity verification
-│   │           └── __tests__/    # integrity.test.ts (8), integrity.property.test.ts (3)
+│   │       └── transactions/     # Utilities + integrity verification [IMPLEMENTED]
+│   │           ├── index.ts      # clampPosition, safeInsertText, safeDelete, etc.
+│   │           └── __tests__/    # integrity.test.ts (9), integrity.property.test.ts (3)
 │   │
 │   ├── document-ai/             # @inkwell/document-ai (180 tests)
 │   │   └── src/
@@ -115,7 +116,7 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │   ├── claude/                  # VCR fixtures: success, errors, streaming edge cases
 │   └── audio/                   # WAV placeholders for whisper tests
 │
-└── docs/                        # ARCHITECTURE, TEST-PLAN, INVARIANTS, PROMPTS
+└── docs/                        # ARCHITECTURE, TEST-PLAN, INVARIANTS, PROMPTS, DECISIONS
 ```
 
 ## File Naming Conventions

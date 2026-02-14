@@ -201,7 +201,7 @@ describe('1.2 Transaction Integrity', () => {
   });
 
   // -----------------------------------------------------------------
-  // Large document rapid transactions
+  // Large document rapid transactions (100 paragraphs)
   // -----------------------------------------------------------------
   it('should handle rapid transactions on a large document without corruption', () => {
     // Build a document with 100 paragraphs
@@ -236,6 +236,48 @@ describe('1.2 Transaction Integrity', () => {
     expect(state.doc.content.size).toBeGreaterThan(100);
     expect(state.doc.textContent).toContain('[insert-99]');
     expect(state.doc.textContent).toContain('Paragraph 99');
+  });
+
+  // -----------------------------------------------------------------
+  // Large document stress test (10,000 nodes, <100ms per transaction)
+  // Ref: Phase 2 Task 2.1
+  // -----------------------------------------------------------------
+  it('should handle transactions on a 10,000-node document under 100ms each', () => {
+    // Build a document with 10,000 paragraphs
+    const paragraphs: PMNode[] = [];
+    for (let i = 0; i < 10_000; i++) {
+      paragraphs.push(
+        inkwellSchema.node('paragraph', null, [
+          inkwellSchema.text(`P${i}`),
+        ]),
+      );
+    }
+    const doc = inkwellSchema.node('doc', null, paragraphs);
+    let state = EditorState.create({
+      doc,
+      schema: inkwellSchema,
+      plugins: [history({ newGroupDelay: 0 })],
+    });
+
+    assertSchemaValid(state.doc);
+
+    // Apply 10 transactions and measure each one stays under 100ms
+    const timings: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      const start = performance.now();
+      const tr = state.tr.insertText(`[stress-${i}]`, 1);
+      state = state.apply(tr);
+      const elapsed = performance.now() - start;
+      timings.push(elapsed);
+    }
+
+    assertSchemaValid(state.doc);
+    expect(state.doc.textContent).toContain('[stress-9]');
+
+    // Every transaction must complete under 100ms
+    for (const t of timings) {
+      expect(t).toBeLessThan(100);
+    }
   });
 
   // -----------------------------------------------------------------

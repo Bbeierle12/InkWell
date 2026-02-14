@@ -1,15 +1,15 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T17:19:48Z
-version: 1.5
+last_updated: 2026-02-14T18:21:06Z
+version: 1.6
 author: Claude Code PM System
 ---
 
 # Progress: Inkwell
 
-## Current Status: TDD Phase 5 Complete
+## Current Status: Implementation Phase 2 — Editor Transaction Layer Complete
 
-Phases 1-5 of the TDD workflow are complete. All 447 TypeScript tests + 57 Rust tests pass: `@inkwell/editor` (181), `@inkwell/document-ai` (180), `@inkwell/mcp-workspace` (55), `@inkwell/shared` (15), `@inkwell/evals` (16), and `inkwell-desktop` (57 Rust). Phase 5 implemented the MCP workspace context layer, evaluation system, and voice pipeline state machine.
+Phases 1-5 TDD scaffolding complete. Implementation Phase 2 (Editor Transaction Layer) is complete: transaction utilities, enhanced stress tests, selective AI undo, TTFT instrumentation, and Y.js integration decision. All 452 TypeScript tests + 57 Rust tests pass: `@inkwell/editor` (186), `@inkwell/document-ai` (180), `@inkwell/mcp-workspace` (55), `@inkwell/shared` (15), `@inkwell/evals` (16), and `inkwell-desktop` (57 Rust).
 
 ## Completed Work
 
@@ -24,17 +24,18 @@ Phases 1-5 of the TDD workflow are complete. All 447 TypeScript tests + 57 Rust 
 - 10 canary tests: Privacy canary detection in MSW interceptor, per-operation verification, no false positives
 - Implemented `ModelRouter.route()` with privacy-first routing logic
 
-**Section 1.2: Transaction Integrity + AI Undo (18 tests)**
-- 8 transaction integrity tests: insertText, delete, replaceWith, undo/redo (20 edits), step mapping, failure recovery, large document rapid transactions, composition
-- 3 property-based transaction tests (10K iterations): arbitrary insertions, serialize-deserialize stability, undo-redo exact state
-- 7 AI undo tests: multi-step collapse to single undo, exact state restoration, redo, non-AI history preservation
-- Implemented `AIOperationSession` with two-phase commit pattern
+**Section 1.2: Transaction Integrity + AI Undo (21 tests)**
+- 9 transaction integrity tests: insertText, delete, replaceWith, undo/redo (20 edits), step mapping, failure recovery, large document (100 para), 10,000-node stress test (<100ms/tx), composition
+- 3 property-based transaction tests (10K iterations each): arbitrary insertions, serialize-deserialize stability, undo-redo exact state
+- 9 AI undo tests: multi-step collapse to single undo, exact state restoration, redo, non-AI history preservation, selective undo (User A → AI B → User C), redo atomicity after AI undo
+- Implemented `AIOperationSession` with three-phase commit pattern (revert → replace → closeHistory)
+- Created `packages/editor/src/transactions/index.ts` — utility module (clampPosition, safeInsertText, safeDelete, assertSchemaValid, applyAndValidate, mapPosition)
 
-**Section 1.3/1.4: Ghost Text + Collaboration (19 tests)**
-- 9 ghost text tests: decoration rendering, never-serialize invariant, auto-clear on typing, stability threshold (Levenshtein), undo stack isolation
+**Section 1.3/1.4: Ghost Text + Collaboration (21 tests)**
+- 11 ghost text tests: decoration rendering, never-serialize invariant, auto-clear on typing, stability threshold (Levenshtein), undo stack isolation, multiple concurrent decorations, TTFT instrumentation
 - 6 origin filter tests: local/remote origin classification for Y.js changes
 - 4 Y.js conflict resolution tests: concurrent edits, deterministic ordering, delete/insert conflicts, offline sync
-- Implemented `GhostText` TipTap extension, `originFilter()`, `createCollaborationDoc()`
+- Implemented `GhostText` TipTap extension with TTFT measurement (`getGhostTextTTFT()`, `clearGhostTextTTFT()`), `originFilter()`, `createCollaborationDoc()`
 
 **Invariants Covered:**
 `schema-valid-after-operation`, `serialize-deserialize-stable`, `decorations-never-serialized`, `undo-redo-exact-state`, `ai-ops-single-undo-step`, `private-docs-never-reach-cloud`, `ghost-text-no-flicker`, `remote-changes-no-suggestion-trigger`
@@ -176,26 +177,27 @@ Phases 1-5 of the TDD workflow are complete. All 447 TypeScript tests + 57 Rust 
 | Check | Result |
 |-------|--------|
 | `@inkwell/shared` tests | 15 passed (2 test files) |
-| `@inkwell/editor` tests | 181 passed (10 test files) |
+| `@inkwell/editor` tests | 186 passed (10 test files) |
 | `@inkwell/document-ai` tests | 180 passed (9 test files) |
 | `@inkwell/mcp-workspace` tests | 55 passed (9 test files) |
 | `@inkwell/evals` tests | 16 passed (2 test files) |
 | `inkwell-desktop` Rust tests | 57 passed (0 warnings) |
-| **Total tests** | **504 passed, 0 failed** |
+| **Total tests** | **509 passed, 0 failed** |
 | Typecheck (shared) | Clean |
 | Typecheck (mcp-workspace) | Clean |
 | Typecheck (evals) | Clean |
 
 ## Git Status
 
-- Git repository initialized, single commit on `main` branch
-- All changes committed, working tree clean
+- Git repository initialized, 2 commits on `main` branch
+- Uncommitted changes: Phase 2 editor transaction layer implementation (7 modified files, 2 new files)
 
 ## Immediate Next Steps
 
-1. **TDD Phase 6** — E2E tests (Playwright), performance benchmarks, full integration
-2. **Wire up real tool implementations** in MCP server (currently delegates to pure functions)
-3. **Tier 2/3 evals** — Local judge + cloud judge implementations
+1. **Commit Phase 2 work** — Transaction utilities, enhanced tests, AI undo improvements, TTFT, DECISIONS.md
+2. **Implementation Phase 3** — Wire up real DocumentAI runtime integration (editor ↔ document-ai)
+3. **E2E tests** (Playwright), performance benchmarks
+4. **Tier 2/3 evals** — Local judge + cloud judge implementations
 
 ## Known Issues
 
@@ -210,3 +212,4 @@ Phases 1-5 of the TDD workflow are complete. All 447 TypeScript tests + 57 Rust 
 - 2026-02-14T02:25:16Z: Phase 3 TDD complete — 361 tests (15 stubs → real assertions), all 14 invariants covered
 - 2026-02-14T02:44:00Z: Phase 4 TDD complete — 418 tests (361 TS + 57 Rust), local inference layer implemented
 - 2026-02-14T17:19:48Z: Phase 5 TDD complete — 504 tests (447 TS + 57 Rust), MCP workspace + evals + voice pipeline
+- 2026-02-14T18:21:06Z: Implementation Phase 2 complete — 509 tests (452 TS + 57 Rust), editor transaction layer hardened

@@ -6,6 +6,7 @@
  */
 
 export * from './schema';
+export * from './transactions';
 export * from './extensions/ghost-text';
 export * from './extensions/slash-commands';
 export * from './extensions/diff-preview';

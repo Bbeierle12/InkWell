@@ -19,6 +19,7 @@
 import { Extension } from '@tiptap/core';
 import { EditorState, type Transaction } from '@tiptap/pm/state';
 import { type Node as PMNode, Fragment, Slice } from '@tiptap/pm/model';
+import { closeHistory } from '@tiptap/pm/history';
 
 /** Meta key used to tag transactions as AI operations. */
 export const AI_OPERATION_META = 'aiOperation';
@@ -98,7 +99,13 @@ export class AIOperationSession {
     // Phase 2: Replace from pre-AI to post-AI (one history entry)
     const commitTr = state.tr.replaceWith(0, state.doc.content.size, postAIContent);
     markAsAIFinal(commitTr);
-    return state.apply(commitTr);
+    state = state.apply(commitTr);
+
+    // Phase 3: Close the history group so the next user edit starts a
+    // new undo entry rather than being merged with this AI operation.
+    state = state.apply(closeHistory(state.tr));
+
+    return state;
   }
 }
 
