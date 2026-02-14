@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T20:40:52Z
-version: 1.9
+last_updated: 2026-02-14T21:14:34Z
+version: 2.0
 author: Claude Code PM System
 ---
 
@@ -252,15 +252,16 @@ Phases 1-5 TDD scaffolding complete. Implementation Phases 2-5 complete. Phase 5
 
 ## Git Status
 
-- Git repository initialized, 4 commits on `main` branch
-- Working tree has uncommitted Phase 5 changes
+- Git repository initialized, 6 commits on `main` branch
+- Working tree clean — all phases committed
 
 ## Immediate Next Steps
 
-1. **Commit Phase 5 work** — Claude API integration, prompt templates, service layer, slash commands, web wiring
-2. **E2E tests** (Playwright), performance benchmarks
-3. **Tier 2/3 evals** — Local judge + cloud judge implementations
+1. **E2E tests** (Playwright) — critical editing flows, AI flows, offline/online transitions
+2. **Performance benchmarks** — TTFT targets, input latency, bridge throughput
+3. **Tier 2/3 evals** — Local 8B judge + Claude-as-judge implementations
 4. **Manual E2E test** — `.env.local` with API key → `pnpm dev` → test slash commands end-to-end
+5. **TypeScript typecheck cleanup** — Fix editor/document-ai vitest globals in tsconfig
 
 ## Known Issues
 
@@ -279,3 +280,4 @@ Phases 1-5 TDD scaffolding complete. Implementation Phases 2-5 complete. Phase 5
 - 2026-02-14T18:48:33Z: Implementation Phase 3 complete — 560 tests (503 TS + 57 Rust), DocumentAI runtime core (router network awareness, debouncer, integrated queue)
 - 2026-02-14T19:47:43Z: Implementation Phase 4 complete — 593 tests (536 TS + 57 Rust), Edit reconciler enhanced (typed results, overlap detection, stale-deleted, schema validation, diff preview)
 - 2026-02-14T20:40:52Z: Implementation Phase 5 complete — 620 tests (563 TS + 57 Rust), Claude API integration (prompt templates, response parser, DocumentAIServiceImpl, slash commands, web app wiring)
+- 2026-02-14T21:14:34Z: All phases committed to main (6 commits). Working tree clean. Ready for E2E/eval phase.
