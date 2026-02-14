@@ -11,7 +11,7 @@ import {
   type QueuedRequest,
   type AIEditInstruction,
 } from '@inkwell/shared';
-import type { DocumentAIService } from './types';
+import type { DocumentAIService, LocalInferenceProvider } from './types';
 import type { RoutingResult } from './router/types';
 import { ModelRouter } from './router';
 import { ContextManager } from './context';
@@ -23,6 +23,7 @@ export interface DocumentAIServiceOptions {
   apiKey: string;
   baseUrl?: string;
   isPrivate?: boolean;
+  localProvider?: LocalInferenceProvider;
 }
 
 export interface AIOperationRequest {
@@ -45,6 +46,7 @@ export class DocumentAIServiceImpl implements DocumentAIService {
   private context: ContextManager;
   private client: ClaudeClient;
   private isPrivate: boolean;
+  private localProvider?: LocalInferenceProvider;
   private destroyed = false;
 
   constructor(options: DocumentAIServiceOptions) {
@@ -55,6 +57,7 @@ export class DocumentAIServiceImpl implements DocumentAIService {
       baseUrl: options.baseUrl,
     });
     this.isPrivate = options.isPrivate ?? false;
+    this.localProvider = options.localProvider;
   }
 
   route(operation: OperationType): ModelTarget {
@@ -92,8 +95,18 @@ export class DocumentAIServiceImpl implements DocumentAIService {
     // 1. Route
     const routing: RoutingResult = this.router.route(request.operation, this.isPrivate);
 
-    // For local-only targets, skip Claude call
+    // For local-only targets, delegate to local provider if available
     if (routing.target === ModelTarget.Local) {
+      if (this.localProvider?.isAvailable()) {
+        const ctx = this.context.build(request.docContent, request.cursorPos, request.docId);
+        const prompt = ctx.stablePrefix + '\n\n' + ctx.volatileSuffix;
+        const result = await this.localProvider.generate(prompt, 128);
+        return {
+          instructions: [],
+          raw: result?.text ?? '',
+          model: ModelTarget.Local,
+        };
+      }
       return { instructions: [], raw: '', model: ModelTarget.Local };
     }
 

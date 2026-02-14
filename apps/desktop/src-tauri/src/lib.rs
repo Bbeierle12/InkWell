@@ -8,17 +8,68 @@ pub mod bridge;
 #[cfg(test)]
 mod tests;
 
+use std::sync::Arc;
+use inference::llama::LlamaEngine;
+use inference::whisper::WhisperEngine;
+
+/// Shared application state managed by Tauri.
+///
+/// Holds Arc-wrapped engines so bridge commands can access them
+/// via `tauri::State<AppState>`.
+pub struct AppState {
+    pub llm: Arc<LlamaEngine>,
+    pub stt: Arc<WhisperEngine>,
+}
+
+/// Create the default `AppState` with appropriate backends.
+///
+/// With `local-inference` feature: uses real llama.cpp/whisper.cpp backends.
+/// Without: uses stub backends that return helpful error messages.
 #[cfg(not(test))]
-mod tests_excluded {
-    use super::bridge::commands;
+fn create_app_state() -> AppState {
+    #[cfg(feature = "local-inference")]
+    {
+        use inference::llama_backend::RealLlmBackend;
+        use inference::whisper_backend::RealSttBackend;
+
+        AppState {
+            llm: Arc::new(LlamaEngine::new(Box::new(RealLlmBackend::new()))),
+            stt: Arc::new(WhisperEngine::new(Box::new(RealSttBackend::new()))),
+        }
+    }
+    #[cfg(not(feature = "local-inference"))]
+    {
+        use inference::StubLlmBackend;
+        use inference::StubSttBackend;
+
+        AppState {
+            llm: Arc::new(LlamaEngine::new(Box::new(StubLlmBackend))),
+            stt: Arc::new(WhisperEngine::new(Box::new(StubSttBackend))),
+        }
+    }
+}
+
+#[cfg(not(test))]
+mod app {
+    use super::*;
+    use bridge::commands;
 
     /// Run the Tauri application.
     pub fn run() {
+        let state = create_app_state();
+
         tauri::Builder::default()
+            .manage(state)
             .invoke_handler(tauri::generate_handler![
                 commands::invoke_local_inference,
                 commands::transcribe_audio,
                 commands::get_system_info,
+                commands::load_llm_model,
+                commands::unload_llm_model,
+                commands::llm_stream,
+                commands::load_whisper_model,
+                commands::unload_whisper_model,
+                commands::transcribe_with_partials,
             ])
             .run(tauri::generate_context!())
             .expect("error while running Inkwell desktop application");
@@ -31,7 +82,7 @@ mod tests_excluded {
 /// a real Tauri config and frontend build.
 #[cfg(not(test))]
 pub fn run() {
-    tests_excluded::run();
+    app::run();
 }
 
 #[cfg(test)]

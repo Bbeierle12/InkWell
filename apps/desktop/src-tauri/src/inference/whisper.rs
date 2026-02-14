@@ -132,6 +132,52 @@ impl WhisperEngine {
         inner.backend.transcribe(audio, language_hint)
     }
 
+    /// Transcribe with streaming partial result callbacks.
+    pub fn transcribe_streaming(
+        &self,
+        audio: &[f32],
+        language_hint: Option<&str>,
+        on_partial: &mut dyn FnMut(&str),
+    ) -> Result<TranscriptionResult, InferenceError> {
+        let inner = self.inner.lock().map_err(|_| {
+            InferenceError::InferenceFailed("Lock poisoned".to_string())
+        })?;
+
+        if inner.state == ModelState::Unloaded {
+            return Err(InferenceError::ModelNotLoaded);
+        }
+
+        if audio.is_empty() {
+            return Err(InferenceError::InvalidAudio(
+                "Audio buffer is empty".to_string(),
+            ));
+        }
+
+        if audio.len() < MIN_AUDIO_SAMPLES {
+            return Err(InferenceError::InvalidAudio(format!(
+                "Audio too short: {} samples (minimum {})",
+                audio.len(),
+                MIN_AUDIO_SAMPLES,
+            )));
+        }
+
+        let duration_secs = audio.len() as f64 / SAMPLE_RATE as f64;
+        if duration_secs > MAX_AUDIO_DURATION_SECS {
+            return Err(InferenceError::InvalidAudio(format!(
+                "Audio too long: {:.1}s (maximum {}s)",
+                duration_secs, MAX_AUDIO_DURATION_SECS,
+            )));
+        }
+
+        if audio.iter().any(|s| !s.is_finite()) {
+            return Err(InferenceError::InvalidAudio(
+                "Audio contains NaN or Inf samples".to_string(),
+            ));
+        }
+
+        inner.backend.transcribe_streaming(audio, language_hint, on_partial)
+    }
+
     /// Check if a model is loaded.
     pub fn is_loaded(&self) -> bool {
         self.inner
@@ -457,6 +503,39 @@ mod tests {
         let audio = fake_audio_secs(1.0);
         let result = engine.transcribe(&audio, Some("es")).unwrap();
         assert_eq!(result.language, "es");
+    }
+
+    // ── §6.3: Streaming transcribe via default fallback ──
+
+    #[test]
+    fn test_transcribe_streaming_via_default_fallback() {
+        let f = temp_bin_file();
+        let backend = MockSttBackend::new();
+        let engine = WhisperEngine::new(Box::new(backend));
+        engine.load_model(f.path().to_str().unwrap()).unwrap();
+
+        let audio = fake_audio_secs(2.0);
+        let mut partials = Vec::new();
+        let result = engine
+            .transcribe_streaming(&audio, None, &mut |partial| {
+                partials.push(partial.to_string());
+            })
+            .unwrap();
+
+        // Default fallback calls on_partial once with full text
+        assert_eq!(partials.len(), 1);
+        assert_eq!(partials[0], "Hello world.");
+        assert_eq!(result.text, "Hello world.");
+    }
+
+    #[test]
+    fn test_transcribe_streaming_no_model_rejected() {
+        let backend = MockSttBackend::new();
+        let engine = WhisperEngine::new(Box::new(backend));
+
+        let audio = fake_audio_secs(1.0);
+        let result = engine.transcribe_streaming(&audio, None, &mut |_| {});
+        assert_eq!(result.unwrap_err(), InferenceError::ModelNotLoaded);
     }
 
     // ── §3.2: Unload lifecycle ──

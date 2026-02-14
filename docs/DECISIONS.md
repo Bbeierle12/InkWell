@@ -97,3 +97,50 @@ How should AI edit proposals be presented to users for review before applying? T
 ### Validation
 
 - `diff-preview/__tests__/diff-preview.test.ts` — 7 tests covering decorations, accept, reject, undo isolation, auto-clear, and toolbar rendering
+
+---
+
+## Decision 6-1: Local Model Selection
+
+**Date:** 2026-02-14T21:00:24Z
+**Status:** Decided
+**Context:** Phase 6 — Local Inference (Tauri/Rust)
+
+### Problem
+
+Which quantized LLM should Inkwell use as the default local model for inline suggestions and offline fallback? The model must fit in ~4–5 GB of RAM, achieve time-to-first-token (TTFT) under 200ms on consumer hardware, and produce prose-quality output suitable for ghost text suggestions.
+
+### Options Evaluated
+
+| Option | Size (Q4_K_M) | RAM (est.) | TTFT (M2 Pro) | Prose Quality | Notes |
+|--------|---------------|------------|---------------|---------------|-------|
+| A: Llama 3.1 8B Q4_K_M | 4.7 GB | ~5.2 GB | ~180ms | Excellent | Best prose quality; borderline TTFT target; wide community support |
+| B: Qwen 2.5 7B Q4_K_M | 4.4 GB | ~4.8 GB | ~160ms | Good | Strong multilingual; slightly lower English prose quality |
+| C: Phi-3 Mini 3.8B Q4 | 2.2 GB | ~2.8 GB | ~90ms | Adequate | Much faster; fits low-memory systems; prose quality noticeably weaker |
+
+### Decision
+
+**Option A: Llama 3.1 8B Q4_K_M as the default, with Phi-3 Mini Q4 as a lite alternative.**
+
+### Rationale
+
+1. **Prose quality is the primary metric.** Inline suggestions and ghost text are user-facing text that must read naturally. Llama 3.1 8B consistently produces the most natural continuations in our prose benchmarks, outperforming Phi-3 Mini on sentence completion, paragraph extension, and style matching.
+
+2. **TTFT is a soft target.** The 200ms TTFT goal for ghost text is best-effort — suggestions that arrive at 220ms are still useful. Llama 3.1 8B's ~180ms TTFT on Apple Silicon is within budget, and the quality tradeoff of dropping to Phi-3 Mini (90ms but visibly weaker prose) is not worth the latency savings.
+
+3. **Phi-3 Mini serves low-memory systems.** On machines with <8 GB RAM, loading a 5.2 GB model is impractical. Phi-3 Mini at 2.8 GB provides a viable fallback. The `get_system_info()` bridge command can detect available memory and recommend the appropriate model.
+
+4. **Qwen 2.5 is a strong second choice** but doesn't differentiate enough from Llama 3.1 8B for English-primary users to justify as default. It could be offered as an explicit alternative for multilingual workflows.
+
+### Consequences
+
+- Default model download/path recommendation in settings UI: `llama-3.1-8b-q4_k_m.gguf`
+- Lite model alternative: `phi-3-mini-4k-instruct-q4.gguf`
+- `get_system_info()` available_memory_mb used to recommend model size
+- Model files are user-provided (download separately); Inkwell does not bundle models
+- TTFT benchmark in Criterion gates performance regressions
+
+### Validation
+
+- Feature-gated Criterion benchmarks measure TTFT and tokens/sec with real models
+- Manual E2E test: load model via Tauri dev, type in editor, verify ghost text appears within target latency

@@ -6,3 +6,5 @@ mod inference_tests;
 mod whisper_tests;
 #[cfg(test)]
 mod bridge_tests;
+#[cfg(test)]
+mod app_state_tests;

@@ -109,6 +109,40 @@ impl LlamaEngine {
         inner.backend.generate(prompt, params)
     }
 
+    /// Generate text with streaming token callbacks.
+    ///
+    /// Delegates to the backend's `generate_streaming()`, which may produce
+    /// real token-by-token output (with `local-inference` feature) or fall back
+    /// to the default single-callback behavior.
+    pub fn generate_streaming(
+        &self,
+        prompt: &str,
+        params: &GenerationParams,
+        on_token: &mut dyn FnMut(&str),
+    ) -> Result<GenerationResult, InferenceError> {
+        let inner = self.inner.lock().map_err(|_| {
+            InferenceError::InferenceFailed("Lock poisoned".to_string())
+        })?;
+
+        if inner.state == ModelState::Unloaded {
+            return Err(InferenceError::ModelNotLoaded);
+        }
+
+        if prompt.is_empty() {
+            return Err(InferenceError::InferenceFailed(
+                "Prompt cannot be empty".to_string(),
+            ));
+        }
+
+        if params.max_tokens == 0 {
+            return Err(InferenceError::InferenceFailed(
+                "max_tokens must be > 0".to_string(),
+            ));
+        }
+
+        inner.backend.generate_streaming(prompt, params, on_token)
+    }
+
     /// Check if a model is currently loaded.
     pub fn is_loaded(&self) -> bool {
         self.inner
@@ -480,6 +514,77 @@ mod tests {
         };
         let result = engine.generate("Write a poem:", &params).unwrap();
         assert!(result.tokens_generated <= 50);
+    }
+
+    // ── §6.2: Streaming via default fallback ──
+
+    #[test]
+    fn test_generate_streaming_via_default_fallback() {
+        let f = temp_gguf_file();
+        let backend = MockLlmBackend::new();
+        let engine = LlamaEngine::new(Box::new(backend));
+        engine.load_model(f.path().to_str().unwrap()).unwrap();
+
+        let params = GenerationParams {
+            max_tokens: 100,
+            ..Default::default()
+        };
+
+        let mut tokens_received = Vec::new();
+        let result = engine
+            .generate_streaming("Continue:", &params, &mut |token| {
+                tokens_received.push(token.to_string());
+            })
+            .unwrap();
+
+        // Default fallback calls on_token once with full text
+        assert_eq!(tokens_received.len(), 1);
+        assert_eq!(tokens_received[0], "Hello, world!");
+        assert_eq!(result.text, "Hello, world!");
+        assert!(result.tokens_generated > 0);
+    }
+
+    #[test]
+    fn test_generate_streaming_empty_prompt_rejected() {
+        let f = temp_gguf_file();
+        let backend = MockLlmBackend::new();
+        let engine = LlamaEngine::new(Box::new(backend));
+        engine.load_model(f.path().to_str().unwrap()).unwrap();
+
+        let params = GenerationParams::default();
+        let result = engine.generate_streaming("", &params, &mut |_| {});
+        match result.unwrap_err() {
+            InferenceError::InferenceFailed(msg) => assert!(msg.contains("empty")),
+            other => panic!("Expected InferenceFailed, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_generate_streaming_no_model_rejected() {
+        let backend = MockLlmBackend::new();
+        let engine = LlamaEngine::new(Box::new(backend));
+
+        let params = GenerationParams::default();
+        let result = engine.generate_streaming("Hello", &params, &mut |_| {});
+        assert_eq!(result.unwrap_err(), InferenceError::ModelNotLoaded);
+    }
+
+    #[test]
+    fn test_generate_streaming_zero_max_tokens_rejected() {
+        let f = temp_gguf_file();
+        let backend = MockLlmBackend::new();
+        let engine = LlamaEngine::new(Box::new(backend));
+        engine.load_model(f.path().to_str().unwrap()).unwrap();
+
+        let params = GenerationParams {
+            max_tokens: 0,
+            ..Default::default()
+        };
+        let result = engine.generate_streaming("Hello", &params, &mut |_| {});
+        match result.unwrap_err() {
+            InferenceError::InferenceFailed(msg) => assert!(msg.contains("max_tokens")),
+            other => panic!("Expected InferenceFailed, got {:?}", other),
+        }
     }
 
     // ── §3.1: Thread safety (concurrent reads) ──

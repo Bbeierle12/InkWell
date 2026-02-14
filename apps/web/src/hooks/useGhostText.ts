@@ -6,6 +6,9 @@
  * Manages the ghost text lifecycle: request, render, accept, dismiss.
  * Requests inline suggestions on cursor idle, renders them as decorations,
  * and handles accept (Tab) / dismiss (continued typing).
+ *
+ * When running in a Tauri environment with a local model loaded,
+ * ghost text streams progressively as tokens arrive.
  */
 import { useCallback, useEffect, useRef } from 'react';
 import type { Editor } from '@tiptap/core';
@@ -50,6 +53,7 @@ export function useGhostText({ editor, enabled = true }: UseGhostTextOptions) {
           const docContent = editor.state.doc.textContent;
 
           abortRef.current = new AbortController();
+          const signal = abortRef.current.signal;
 
           const result = await service.executeOperation({
             operation: OperationType.InlineSuggest,
@@ -57,8 +61,9 @@ export function useGhostText({ editor, enabled = true }: UseGhostTextOptions) {
             cursorPos: from,
           });
 
-          // InlineSuggest routes to Local, which returns empty
-          // Future: when local inference is wired, this will have content
+          // If aborted during execution, don't update
+          if (signal.aborted) return;
+
           if (result.raw && editor) {
             const tr = editor.state.tr.setMeta(GhostTextPluginKey, {
               text: result.raw,

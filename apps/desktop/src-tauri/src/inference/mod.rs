@@ -6,6 +6,11 @@
 pub mod llama;
 pub mod whisper;
 
+#[cfg(feature = "local-inference")]
+pub mod llama_backend;
+#[cfg(feature = "local-inference")]
+pub mod whisper_backend;
+
 use std::fmt;
 
 /// Errors that can occur during local inference.
@@ -102,6 +107,21 @@ pub trait LlmBackend: Send + Sync {
     /// Generate text from the given token-encoded prompt.
     fn generate(&self, prompt: &str, params: &GenerationParams) -> Result<GenerationResult, InferenceError>;
 
+    /// Generate text with streaming token callbacks.
+    ///
+    /// Default implementation falls back to non-streaming `generate()`,
+    /// invoking `on_token` once with the full result.
+    fn generate_streaming(
+        &self,
+        prompt: &str,
+        params: &GenerationParams,
+        on_token: &mut dyn FnMut(&str),
+    ) -> Result<GenerationResult, InferenceError> {
+        let result = self.generate(prompt, params)?;
+        on_token(&result.text);
+        Ok(result)
+    }
+
     /// Unload the current model, freeing resources.
     fn unload(&self) -> Result<(), InferenceError>;
 }
@@ -113,6 +133,21 @@ pub trait SttBackend: Send + Sync {
 
     /// Transcribe PCM f32 audio at 16kHz mono.
     fn transcribe(&self, audio: &[f32], language_hint: Option<&str>) -> Result<TranscriptionResult, InferenceError>;
+
+    /// Transcribe with streaming partial result callbacks.
+    ///
+    /// Default implementation falls back to non-streaming `transcribe()`,
+    /// invoking `on_partial` once with the full result.
+    fn transcribe_streaming(
+        &self,
+        audio: &[f32],
+        language_hint: Option<&str>,
+        on_partial: &mut dyn FnMut(&str),
+    ) -> Result<TranscriptionResult, InferenceError> {
+        let result = self.transcribe(audio, language_hint)?;
+        on_partial(&result.text);
+        Ok(result)
+    }
 
     /// Unload the model, freeing resources.
     fn unload(&self) -> Result<(), InferenceError>;
@@ -127,5 +162,46 @@ pub struct ModelMetadata {
     pub size_bytes: u64,
     /// Context window size (for LLMs).
     pub context_length: Option<usize>,
+}
+
+/// Stub LLM backend for builds without the `local-inference` feature.
+///
+/// All operations return `ModelNotLoaded`, guiding users to enable the feature
+/// or load a real model.
+pub struct StubLlmBackend;
+
+impl LlmBackend for StubLlmBackend {
+    fn load(&self, _path: &str) -> Result<ModelMetadata, InferenceError> {
+        Err(InferenceError::InferenceFailed(
+            "Local inference not available. Build with --features local-inference".to_string(),
+        ))
+    }
+
+    fn generate(&self, _prompt: &str, _params: &GenerationParams) -> Result<GenerationResult, InferenceError> {
+        Err(InferenceError::ModelNotLoaded)
+    }
+
+    fn unload(&self) -> Result<(), InferenceError> {
+        Ok(())
+    }
+}
+
+/// Stub STT backend for builds without the `local-inference` feature.
+pub struct StubSttBackend;
+
+impl SttBackend for StubSttBackend {
+    fn load(&self, _path: &str) -> Result<ModelMetadata, InferenceError> {
+        Err(InferenceError::InferenceFailed(
+            "Local inference not available. Build with --features local-inference".to_string(),
+        ))
+    }
+
+    fn transcribe(&self, _audio: &[f32], _language_hint: Option<&str>) -> Result<TranscriptionResult, InferenceError> {
+        Err(InferenceError::ModelNotLoaded)
+    }
+
+    fn unload(&self) -> Result<(), InferenceError> {
+        Ok(())
+    }
 }
 

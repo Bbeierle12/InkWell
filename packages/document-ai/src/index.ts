@@ -20,4 +20,4 @@ export { DocumentAIServiceImpl } from './service';
 export type { DocumentAIServiceOptions, AIOperationRequest, AIOperationResult } from './service';
 export { getPromptTemplate, renderPrompt } from './prompts';
 export type { PromptTemplate } from './prompts';
-export type { DocumentAIService } from './types';
+export type { DocumentAIService, LocalInferenceProvider } from './types';

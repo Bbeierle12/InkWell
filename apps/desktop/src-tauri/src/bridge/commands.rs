@@ -4,6 +4,10 @@
 //! They handle serialization, validation, and delegation to the inference engines.
 
 use serde::{Deserialize, Serialize};
+use tauri::{Emitter, State};
+
+use crate::AppState;
+use crate::inference::{GenerationParams, InferenceError};
 
 /// Request payload for local inference.
 #[derive(Debug, Clone, Deserialize)]
@@ -57,6 +61,49 @@ impl std::fmt::Display for BridgeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}: {}", self.code, self.message)
     }
+}
+
+/// Request to load a model file.
+#[derive(Debug, Clone, Deserialize)]
+pub struct LoadModelRequest {
+    pub path: String,
+}
+
+/// Response after loading a model.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct LoadModelResponse {
+    pub name: String,
+    pub size_bytes: u64,
+    pub context_length: Option<usize>,
+}
+
+/// Event emitted during streaming generation.
+#[derive(Debug, Clone, Serialize)]
+pub struct StreamTokenEvent {
+    pub token: String,
+    pub done: bool,
+}
+
+/// Map an InferenceError to a bridge error code string.
+pub fn error_code_from_inference_error(err: &InferenceError) -> String {
+    match err {
+        InferenceError::ModelNotLoaded => "MODEL_NOT_LOADED".to_string(),
+        InferenceError::ModelNotFound(_) => "MODEL_NOT_FOUND".to_string(),
+        InferenceError::InferenceFailed(_) => "INFERENCE_FAILED".to_string(),
+        InferenceError::InvalidFormat(_) => "INVALID_FORMAT".to_string(),
+        InferenceError::ModelBusy => "MODEL_BUSY".to_string(),
+        InferenceError::Cancelled => "CANCELLED".to_string(),
+        InferenceError::InvalidAudio(_) => "INVALID_AUDIO".to_string(),
+    }
+}
+
+/// Convert an InferenceError into a serialized BridgeError string.
+fn bridge_err(err: InferenceError) -> String {
+    let be = BridgeError {
+        code: error_code_from_inference_error(&err),
+        message: err.to_string(),
+    };
+    serde_json::to_string(&be).unwrap_or_else(|_| be.to_string())
 }
 
 /// Validate an inference request before processing.
@@ -120,36 +167,60 @@ pub fn validate_transcribe_request(req: &TranscribeRequest) -> Result<(), Bridge
 /// Invoke local LLM inference from the JS frontend.
 #[tauri::command]
 pub async fn invoke_local_inference(
+    state: State<'_, AppState>,
     request: InferenceRequest,
 ) -> Result<InferenceResponse, String> {
     validate_inference_request(&request).map_err(|e| {
         serde_json::to_string(&e).unwrap_or_else(|_| e.to_string())
     })?;
 
-    // TODO: delegate to LlamaEngine when integrated with app state
-    // For now, return a structured error indicating model not loaded
-    Err(serde_json::to_string(&BridgeError {
-        code: "MODEL_NOT_LOADED".to_string(),
-        message: "No model is currently loaded. Use load_model first.".to_string(),
+    let params = GenerationParams {
+        max_tokens: request.max_tokens,
+        temperature: request.temperature.unwrap_or(0.7),
+        top_p: request.top_p.unwrap_or(0.9),
+        stop_sequences: Vec::new(),
+    };
+
+    let result = state.llm.generate(&request.prompt, &params).map_err(bridge_err)?;
+
+    Ok(InferenceResponse {
+        text: result.text,
+        tokens_generated: result.tokens_generated,
+        time_ms: result.total_time_ms,
     })
-    .unwrap())
 }
 
 /// Invoke audio transcription from the JS frontend.
 #[tauri::command]
 pub async fn transcribe_audio(
+    state: State<'_, AppState>,
     request: TranscribeRequest,
 ) -> Result<TranscribeResponse, String> {
     validate_transcribe_request(&request).map_err(|e| {
         serde_json::to_string(&e).unwrap_or_else(|_| e.to_string())
     })?;
 
-    // TODO: delegate to WhisperEngine when integrated with app state
-    Err(serde_json::to_string(&BridgeError {
-        code: "MODEL_NOT_LOADED".to_string(),
-        message: "No whisper model is currently loaded.".to_string(),
+    // Read audio file as PCM f32 (simplified: assumes raw f32 PCM at 16kHz)
+    let audio_bytes = std::fs::read(&request.audio_path).map_err(|e| {
+        bridge_err(InferenceError::InvalidAudio(format!(
+            "Failed to read audio file: {}", e
+        )))
+    })?;
+
+    // Convert bytes to f32 samples
+    let audio: Vec<f32> = audio_bytes
+        .chunks_exact(4)
+        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+        .collect();
+
+    let lang_hint = request.language.as_deref();
+    let result = state.stt.transcribe(&audio, lang_hint).map_err(bridge_err)?;
+
+    Ok(TranscribeResponse {
+        text: result.text,
+        language: result.language,
+        duration_ms: result.duration_ms,
     })
-    .unwrap())
 }
 
 /// Get system information for capability detection.
@@ -159,6 +230,152 @@ pub async fn get_system_info() -> Result<SystemInfo, String> {
         platform: std::env::consts::OS.to_string(),
         has_gpu: detect_gpu(),
         available_memory_mb: get_available_memory_mb(),
+    })
+}
+
+/// Load a GGUF model file for LLM inference.
+#[tauri::command]
+pub async fn load_llm_model(
+    state: State<'_, AppState>,
+    request: LoadModelRequest,
+) -> Result<LoadModelResponse, String> {
+    if request.path.is_empty() {
+        return Err(bridge_err(InferenceError::InvalidFormat(
+            "Model path cannot be empty".to_string(),
+        )));
+    }
+
+    let metadata = state.llm.load_model(&request.path).map_err(bridge_err)?;
+
+    Ok(LoadModelResponse {
+        name: metadata.name,
+        size_bytes: metadata.size_bytes,
+        context_length: metadata.context_length,
+    })
+}
+
+/// Unload the current LLM model and free resources.
+#[tauri::command]
+pub async fn unload_llm_model(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state.llm.unload().map_err(bridge_err)
+}
+
+/// Streaming LLM generation via Tauri events.
+///
+/// Emits `llm-token` events with `StreamTokenEvent` payloads as tokens
+/// are generated, then a final event with `done: true`.
+#[tauri::command]
+pub async fn llm_stream(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+    request: InferenceRequest,
+) -> Result<InferenceResponse, String> {
+    validate_inference_request(&request).map_err(|e| {
+        serde_json::to_string(&e).unwrap_or_else(|_| e.to_string())
+    })?;
+
+    let params = GenerationParams {
+        max_tokens: request.max_tokens,
+        temperature: request.temperature.unwrap_or(0.7),
+        top_p: request.top_p.unwrap_or(0.9),
+        stop_sequences: Vec::new(),
+    };
+
+    let app_handle = app.clone();
+    let result = state.llm.generate_streaming(
+        &request.prompt,
+        &params,
+        &mut |token| {
+            let _ = app_handle.emit("llm-token", StreamTokenEvent {
+                token: token.to_string(),
+                done: false,
+            });
+        },
+    ).map_err(bridge_err)?;
+
+    // Emit final done event
+    let _ = app.emit("llm-token", StreamTokenEvent {
+        token: String::new(),
+        done: true,
+    });
+
+    Ok(InferenceResponse {
+        text: result.text,
+        tokens_generated: result.tokens_generated,
+        time_ms: result.total_time_ms,
+    })
+}
+
+/// Load a Whisper model file for speech-to-text.
+#[tauri::command]
+pub async fn load_whisper_model(
+    state: State<'_, AppState>,
+    request: LoadModelRequest,
+) -> Result<LoadModelResponse, String> {
+    if request.path.is_empty() {
+        return Err(bridge_err(InferenceError::InvalidFormat(
+            "Model path cannot be empty".to_string(),
+        )));
+    }
+
+    let metadata = state.stt.load_model(&request.path).map_err(bridge_err)?;
+
+    Ok(LoadModelResponse {
+        name: metadata.name,
+        size_bytes: metadata.size_bytes,
+        context_length: metadata.context_length,
+    })
+}
+
+/// Unload the current Whisper model and free resources.
+#[tauri::command]
+pub async fn unload_whisper_model(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state.stt.unload().map_err(bridge_err)
+}
+
+/// Transcribe audio with partial result events.
+///
+/// Emits `whisper-partial` events as segments are transcribed.
+#[tauri::command]
+pub async fn transcribe_with_partials(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+    request: TranscribeRequest,
+) -> Result<TranscribeResponse, String> {
+    validate_transcribe_request(&request).map_err(|e| {
+        serde_json::to_string(&e).unwrap_or_else(|_| e.to_string())
+    })?;
+
+    let audio_bytes = std::fs::read(&request.audio_path).map_err(|e| {
+        bridge_err(InferenceError::InvalidAudio(format!(
+            "Failed to read audio file: {}", e
+        )))
+    })?;
+
+    let audio: Vec<f32> = audio_bytes
+        .chunks_exact(4)
+        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+        .collect();
+
+    let lang_hint = request.language.as_deref();
+    let app_handle = app.clone();
+
+    let result = state.stt.transcribe_streaming(
+        &audio,
+        lang_hint,
+        &mut |partial| {
+            let _ = app_handle.emit("whisper-partial", partial.to_string());
+        },
+    ).map_err(bridge_err)?;
+
+    Ok(TranscribeResponse {
+        text: result.text,
+        language: result.language,
+        duration_ms: result.duration_ms,
     })
 }
 
@@ -191,7 +408,6 @@ fn get_available_memory_mb() -> u64 {
     // Real implementation would use platform-specific APIs
     #[cfg(target_os = "windows")]
     {
-        // Try reading from sysinfo, fallback to 8GB default
         8192
     }
     #[cfg(not(target_os = "windows"))]
@@ -460,5 +676,82 @@ mod tests {
         let json = serde_json::to_value(&si).unwrap();
         let decoded: SystemInfo = serde_json::from_value(json).unwrap();
         assert_eq!(si, decoded);
+    }
+
+    // ── §6.4: Error code mapping ──
+
+    #[test]
+    fn test_error_code_from_inference_error() {
+        assert_eq!(
+            error_code_from_inference_error(&InferenceError::ModelNotLoaded),
+            "MODEL_NOT_LOADED"
+        );
+        assert_eq!(
+            error_code_from_inference_error(&InferenceError::ModelNotFound("x".into())),
+            "MODEL_NOT_FOUND"
+        );
+        assert_eq!(
+            error_code_from_inference_error(&InferenceError::InferenceFailed("x".into())),
+            "INFERENCE_FAILED"
+        );
+        assert_eq!(
+            error_code_from_inference_error(&InferenceError::InvalidFormat("x".into())),
+            "INVALID_FORMAT"
+        );
+        assert_eq!(
+            error_code_from_inference_error(&InferenceError::ModelBusy),
+            "MODEL_BUSY"
+        );
+        assert_eq!(
+            error_code_from_inference_error(&InferenceError::Cancelled),
+            "CANCELLED"
+        );
+        assert_eq!(
+            error_code_from_inference_error(&InferenceError::InvalidAudio("x".into())),
+            "INVALID_AUDIO"
+        );
+    }
+
+    // ── §6.4: LoadModelRequest/Response serialization ──
+
+    #[test]
+    fn test_load_model_request_deserialization() {
+        let json = r#"{"path": "/models/llama.gguf"}"#;
+        let req: LoadModelRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.path, "/models/llama.gguf");
+    }
+
+    #[test]
+    fn test_load_model_response_serialization() {
+        let resp = LoadModelResponse {
+            name: "llama-8b".into(),
+            size_bytes: 4_700_000_000,
+            context_length: Some(8192),
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains("\"name\":\"llama-8b\""));
+
+        let decoded: LoadModelResponse = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, resp);
+    }
+
+    // ── §6.4: StreamTokenEvent serialization ──
+
+    #[test]
+    fn test_stream_token_event_serialization() {
+        let event = StreamTokenEvent {
+            token: "Hello".into(),
+            done: false,
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"token\":\"Hello\""));
+        assert!(json.contains("\"done\":false"));
+
+        let done_event = StreamTokenEvent {
+            token: String::new(),
+            done: true,
+        };
+        let json = serde_json::to_string(&done_event).unwrap();
+        assert!(json.contains("\"done\":true"));
     }
 }
