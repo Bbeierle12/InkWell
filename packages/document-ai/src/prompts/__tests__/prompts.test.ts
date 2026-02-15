@@ -45,10 +45,13 @@ describe('Prompt Templates', () => {
     );
   });
 
-  it('should throw for VoiceRefine (no prompt template)', () => {
-    expect(() => getPromptTemplate(OperationType.VoiceRefine)).toThrow(
-      /no prompt template/i,
-    );
+  it('should return a template for VoiceRefine operation', () => {
+    const template = getPromptTemplate(OperationType.VoiceRefine);
+    expect(template.system).toBeTruthy();
+    expect(template.userTemplate).toBeTruthy();
+    expect(template.userTemplate).toContain('{{document_context}}');
+    expect(template.userTemplate).toContain('{{raw_transcript}}');
+    expect(template.userTemplate).toContain('{{style_profile}}');
   });
 
   it('should substitute all {{placeholders}} in renderPrompt', () => {

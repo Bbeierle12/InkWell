@@ -379,6 +379,55 @@ pub async fn transcribe_with_partials(
     })
 }
 
+/// Request payload for audio transcription from raw PCM bytes.
+#[derive(Debug, Clone, Deserialize)]
+pub struct TranscribeAudioBytesRequest {
+    pub samples: Vec<f32>,
+    pub language: Option<String>,
+}
+
+/// Validate a transcribe-audio-bytes request.
+pub fn validate_transcribe_audio_bytes_request(req: &TranscribeAudioBytesRequest) -> Result<(), BridgeError> {
+    if req.samples.is_empty() {
+        return Err(BridgeError {
+            code: "INVALID_AUDIO".to_string(),
+            message: "Audio samples cannot be empty".to_string(),
+        });
+    }
+    if let Some(ref lang) = req.language {
+        if lang.len() < 2 || lang.len() > 5 {
+            return Err(BridgeError {
+                code: "INVALID_LANGUAGE".to_string(),
+                message: "language code must be 2-5 characters".to_string(),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Invoke audio transcription from raw PCM f32 samples sent directly from JS.
+///
+/// Avoids the need for temp files — the JS frontend sends Float32Array data
+/// as a regular array, which Tauri deserializes to Vec<f32>.
+#[tauri::command]
+pub async fn transcribe_audio_bytes(
+    state: State<'_, AppState>,
+    request: TranscribeAudioBytesRequest,
+) -> Result<TranscribeResponse, String> {
+    validate_transcribe_audio_bytes_request(&request).map_err(|e| {
+        serde_json::to_string(&e).unwrap_or_else(|_| e.to_string())
+    })?;
+
+    let lang_hint = request.language.as_deref();
+    let result = state.stt.transcribe(&request.samples, lang_hint).map_err(bridge_err)?;
+
+    Ok(TranscribeResponse {
+        text: result.text,
+        language: result.language,
+        duration_ms: result.duration_ms,
+    })
+}
+
 /// Simple GPU detection heuristic.
 fn detect_gpu() -> bool {
     // On Windows, check for common GPU indicators
@@ -753,5 +802,53 @@ mod tests {
         };
         let json = serde_json::to_string(&done_event).unwrap();
         assert!(json.contains("\"done\":true"));
+    }
+
+    // ── TranscribeAudioBytesRequest deserialization ──
+
+    #[test]
+    fn test_transcribe_audio_bytes_request_deserialization() {
+        let json = r#"{"samples": [0.1, 0.2, 0.3]}"#;
+        let req: TranscribeAudioBytesRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.samples.len(), 3);
+        assert!((req.samples[0] - 0.1).abs() < 0.001);
+        assert!(req.language.is_none());
+    }
+
+    #[test]
+    fn test_transcribe_audio_bytes_request_with_language() {
+        let json = r#"{"samples": [0.5], "language": "en"}"#;
+        let req: TranscribeAudioBytesRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.samples.len(), 1);
+        assert_eq!(req.language.as_deref(), Some("en"));
+    }
+
+    #[test]
+    fn test_validate_transcribe_audio_bytes_request_valid() {
+        let req = TranscribeAudioBytesRequest {
+            samples: vec![0.1, 0.2],
+            language: Some("en".into()),
+        };
+        assert!(validate_transcribe_audio_bytes_request(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_transcribe_audio_bytes_request_empty_samples() {
+        let req = TranscribeAudioBytesRequest {
+            samples: vec![],
+            language: None,
+        };
+        let err = validate_transcribe_audio_bytes_request(&req).unwrap_err();
+        assert_eq!(err.code, "INVALID_AUDIO");
+    }
+
+    #[test]
+    fn test_validate_transcribe_audio_bytes_request_invalid_language() {
+        let req = TranscribeAudioBytesRequest {
+            samples: vec![0.1],
+            language: Some("x".into()),
+        };
+        let err = validate_transcribe_audio_bytes_request(&req).unwrap_err();
+        assert_eq!(err.code, "INVALID_LANGUAGE");
     }
 }

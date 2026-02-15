@@ -77,6 +77,7 @@ mod app {
                 commands::load_whisper_model,
                 commands::unload_whisper_model,
                 commands::transcribe_with_partials,
+                commands::transcribe_audio_bytes,
             ])
             .run(tauri::generate_context!())
             .expect("error while running Inkwell desktop application");

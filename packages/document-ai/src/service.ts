@@ -33,6 +33,7 @@ export interface AIOperationRequest {
   selection?: { from: number; to: number; text: string };
   targetTone?: string;
   docId?: string;
+  rawTranscript?: string;
 }
 
 export interface AIOperationResult {
@@ -122,6 +123,9 @@ export class DocumentAIServiceImpl implements DocumentAIService {
     if (request.targetTone) {
       vars.target_tone = request.targetTone;
     }
+    if (request.rawTranscript) {
+      vars.raw_transcript = request.rawTranscript;
+    }
     vars.style_profile = ctx.stablePrefix;
 
     const { system, user } = renderPrompt(template, vars);
@@ -137,6 +141,15 @@ export class DocumentAIServiceImpl implements DocumentAIService {
     );
 
     // 5. Collect and parse
+    // VoiceRefine returns plain text, not JSON edit instructions
+    if (request.operation === OperationType.VoiceRefine) {
+      let raw = '';
+      for await (const delta of stream) {
+        raw += delta;
+      }
+      return { instructions: [], raw: raw.trim(), model: routing.target };
+    }
+
     const { raw, instructions } = await collectAndParse(stream);
 
     return { instructions, raw, model: routing.target };

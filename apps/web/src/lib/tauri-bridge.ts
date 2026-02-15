@@ -176,6 +176,37 @@ export async function streamLocalInference(
 
 // ── Whisper Commands ──
 
+interface TranscribeResponse {
+  text: string;
+  language: string;
+  duration_ms: number;
+}
+
+/**
+ * Transcribe audio from raw PCM f32 samples.
+ *
+ * Sends Float32Array data directly to the Rust backend, avoiding temp files.
+ * Returns null when not running in a Tauri environment.
+ */
+export async function transcribeAudioBytes(
+  samples: Float32Array,
+  language?: string,
+): Promise<TranscribeResponse | null> {
+  const invoke = await getTauriInvoke();
+  if (!invoke) return null;
+
+  try {
+    return (await invoke('transcribe_audio_bytes', {
+      request: {
+        samples: Array.from(samples),
+        language,
+      },
+    })) as TranscribeResponse;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Load a Whisper model file for speech-to-text.
  */

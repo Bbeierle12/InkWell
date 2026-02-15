@@ -20,6 +20,8 @@ import {
 import type { SlashCommandItem } from '@inkwell/editor';
 import { useDocumentAI } from '../hooks/useDocumentAI';
 import { useGhostText } from '../hooks/useGhostText';
+import { useVoicePipeline } from '../hooks/useVoicePipeline';
+import { VoiceInput } from './VoiceInput';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const defaultCommands: SlashCommandItem[] = [
@@ -72,6 +74,7 @@ export function Editor() {
 
   const { isReady, executeOperation, acceptDiff, rejectDiff } = useDocumentAI({ editor });
   useGhostText({ editor, enabled: isReady });
+  const voicePipeline = useVoicePipeline({ editor });
 
   const handleSlashCommand = useCallback(
     (operation: OperationType, args?: string) => {
@@ -102,6 +105,9 @@ export function Editor() {
 
   return (
     <div className="prose prose-lg max-w-none">
+      <div className="mb-2">
+        <VoiceInput pipeline={voicePipeline} />
+      </div>
       <div data-testid="inkwell-editor">
         <EditorContent editor={editor} />
       </div>

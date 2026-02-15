@@ -9,6 +9,7 @@ import { rewriteTemplate } from './rewrite';
 import { summarizeTemplate } from './summarize';
 import { expandTemplate } from './expand';
 import { critiqueTemplate } from './critique';
+import { voiceRefineTemplate } from './voice-refine';
 
 export interface PromptTemplate {
   /** System prompt sent as the system parameter. */
@@ -22,19 +23,20 @@ const templateMap: Record<string, PromptTemplate> = {
   [OperationType.Summarize]: summarizeTemplate,
   [OperationType.Expand]: expandTemplate,
   [OperationType.Critique]: critiqueTemplate,
+  [OperationType.VoiceRefine]: voiceRefineTemplate,
 };
 
 /**
  * Get the prompt template for a given operation type.
  *
- * Throws for InlineSuggest (local-only, no prompt template) and VoiceRefine.
+ * Throws for InlineSuggest (local-only, no prompt template).
  */
 export function getPromptTemplate(operation: OperationType): PromptTemplate {
   const template = templateMap[operation];
   if (!template) {
     throw new Error(
       `No prompt template for operation "${operation}". ` +
-      `Only rewrite, summarize, expand, and critique have templates.`,
+      `Only rewrite, summarize, expand, critique, and voice_refine have templates.`,
     );
   }
   return template;
