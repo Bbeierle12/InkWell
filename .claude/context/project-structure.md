@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-15T01:20:41Z
-version: 2.0
+last_updated: 2026-02-15T03:41:01Z
+version: 2.1
 author: Claude Code PM System
 ---
 
@@ -107,7 +107,7 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │           └── index.ts          # Expanded barrel exports (+ WorkspaceIndexer, simpleEmbed)
 │
 ├── apps/
-│   ├── web/                     # @inkwell/web (24 tests)
+│   ├── web/                     # @inkwell/web (97 tests)
 │   │   └── src/
 │   │       ├── app/             # App Router (layout, page, globals.css)
 │   │       ├── components/      # Editor, Toolbar, DiffPreview, Backpressure, VoiceInput
@@ -130,17 +130,30 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │       │   └── benches/         # Criterion benchmarks
 │       └── tauri.conf.json      # frontendDist: ../../web/out
 │
-├── evals/                       # @inkwell/evals (18 tests)
+├── evals/                       # @inkwell/evals (32 tests)
+│   ├── vitest.config.ts         # Vitest config (globals, 15s timeout)
 │   └── src/
 │       ├── compare.ts           # Similarity scoring (exactMatch, cosine, BLEU-4, ROUGE-L) [IMPLEMENTED]
 │       ├── compare.test.ts      # 12 tests
 │       ├── tier1/               # Structural checks [IMPLEMENTED] — structural.test.ts (6)
-│       ├── tier2/               # Local 8B judge (stub)
-│       ├── tier3/               # Claude-as-judge (stub)
+│       ├── tier2/               # Deterministic local judge [IMPLEMENTED]
+│       │   ├── local-judge.ts   # Heuristic scoring using compare() + operation-specific scorers
+│       │   ├── local-judge.test.ts # 8 tests
+│       │   └── fixtures/judge-prompts.json  # Criteria per operation (4 criteria each)
+│       ├── tier3/               # Cloud judge (Claude-as-Judge) [IMPLEMENTED]
+│       │   ├── cloud-judge.ts   # Claude API integration with JSON extraction
+│       │   ├── cloud-judge.test.ts # 6 tests (MSW-mocked)
+│       │   ├── test-setup.ts    # MSW server setup for Claude API
+│       │   └── fixtures/judge-prompts.json  # Criteria per operation (5 criteria each)
 │       └── golden/              # Reference outputs (rewrite, summarize, expand, critique)
 │
-├── e2e/                         # @inkwell/e2e (Playwright)
-│   └── tests/                   # editing-flows, ai-flows, offline-online, performance
+├── e2e/                         # @inkwell/e2e (Playwright — 21 specs)
+│   ├── playwright.config.ts     # Chromium-only, 30s webServer timeout
+│   └── tests/
+│       ├── editing-flows.spec.ts   # 8 tests: load, type, bold, italic, undo/redo, headings, lists, copy/paste
+│       ├── ai-flows.spec.ts        # 5 tests: slash palette, navigation, filtering, AI dropdown, mode indicator
+│       ├── offline-online.spec.ts  # 4 tests: online default, go offline, recover, edit while offline
+│       └── performance.spec.ts     # 4 tests: load time, typing speed, large doc, scroll stability
 │
 ├── fixtures/
 │   ├── claude/                  # VCR fixtures: success, errors, streaming edge cases

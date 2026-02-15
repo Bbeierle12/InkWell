@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-15T03:06:22Z
-version: 1.4
+last_updated: 2026-02-15T03:41:01Z
+version: 1.5
 author: Claude Code PM System
 ---
 
@@ -72,7 +72,7 @@ author: Claude Code PM System
 | Vitest | ^2.1.8 | Unit tests + fuzz tests |
 | @vitest/coverage-v8 | ^2.1.8 | Code coverage |
 | fast-check | ^3.23.2 | Property-based testing |
-| MSW | ^2.7.0 | API mocking (VCR fixtures) |
+| MSW | ^2.7.0 | API mocking (document-ai VCR fixtures + evals Tier 3 cloud judge) |
 | Playwright | ^1.49.1 | E2E testing |
 | jsdom | ^28.0.0 | DOM environment for editor tests |
 | prosemirror-test-builder | ^1.1.1 | ProseMirror test utilities |
