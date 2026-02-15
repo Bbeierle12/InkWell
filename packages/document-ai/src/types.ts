@@ -33,7 +33,7 @@ export interface DocumentAIService {
   enqueue(request: QueuedRequest): Promise<void>;
 
   /** Build the context window for a given cursor position. */
-  buildContext(docContent: string, cursorPos: number): DocumentContext;
+  buildContext(docContent: string, cursorPos: number): Promise<DocumentContext>;
 
   /** Reconcile AI output into editor transactions. */
   reconcile(aiOutput: string, currentDoc: unknown): unknown;

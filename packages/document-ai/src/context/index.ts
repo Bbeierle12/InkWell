@@ -5,8 +5,12 @@
  * Combines a stable prefix (system prompt + style + outline) with a
  * volatile suffix (cursor-relative sliding window) to build a
  * DocumentContext suitable for prompt caching.
+ *
+ * When a WorkspaceRetriever is provided, includes cross-document
+ * snippets from related workspace files.
  */
-import type { DocumentContext } from '@inkwell/shared';
+import type { DocumentContext, WorkspaceRetriever } from '@inkwell/shared';
+import { WORKSPACE_SNIPPET_RATIO } from '@inkwell/shared';
 import { PrefixCache } from './prefix-cache';
 import { analyzeStyle } from './style-profile';
 import { slidingWindow } from './sliding-window';
@@ -64,10 +68,16 @@ function extractOutline(content: string, maxChars: number = 500): string {
 export class ContextManager {
   private prefixCache: PrefixCache;
   private windowTokens: number;
+  private workspaceRetriever?: WorkspaceRetriever;
 
-  constructor(options?: { prefixCache?: PrefixCache; windowTokens?: number }) {
+  constructor(options?: {
+    prefixCache?: PrefixCache;
+    windowTokens?: number;
+    workspaceRetriever?: WorkspaceRetriever;
+  }) {
     this.prefixCache = options?.prefixCache ?? new PrefixCache();
     this.windowTokens = options?.windowTokens ?? DEFAULT_WINDOW_TOKENS;
+    this.workspaceRetriever = options?.workspaceRetriever;
   }
 
   /**
@@ -76,8 +86,14 @@ export class ContextManager {
    * @param docContent - The full document text
    * @param cursorPos - The cursor position within the document
    * @param docId - Optional document identifier for cache keying (defaults to 'default')
+   * @param tokenBudget - Optional total token budget for workspace snippet allocation
    */
-  build(docContent: string, cursorPos: number, docId: string = 'default'): DocumentContext {
+  async build(
+    docContent: string,
+    cursorPos: number,
+    docId: string = 'default',
+    tokenBudget?: number,
+  ): Promise<DocumentContext> {
     // 1. Build stable prefix (using cache)
     const stablePrefix = this.prefixCache.getPrefix(docId, () =>
       this.computeStablePrefix(docContent),
@@ -87,16 +103,45 @@ export class ContextManager {
     const window = slidingWindow(docContent, cursorPos, this.windowTokens);
     const volatileSuffix = window.before + window.after;
 
-    // 3. Compute token count (approximate: ~4 chars per token)
-    const totalChars = stablePrefix.length + volatileSuffix.length;
+    // 3. Retrieve workspace snippets (if retriever available and budget given)
+    let workspaceSnippets = '';
+    if (this.workspaceRetriever && tokenBudget) {
+      const prefixTokens = Math.ceil(stablePrefix.length / CHARS_PER_TOKEN);
+      const snippetBudget = Math.floor(
+        (tokenBudget - prefixTokens) * WORKSPACE_SNIPPET_RATIO,
+      );
+
+      if (snippetBudget > 0) {
+        // Use a small window around cursor as search query
+        const queryChars = 50 * CHARS_PER_TOKEN; // ~50 tokens
+        const queryStart = Math.max(0, cursorPos - Math.floor(queryChars / 2));
+        const queryEnd = Math.min(docContent.length, cursorPos + Math.floor(queryChars / 2));
+        const query = docContent.slice(queryStart, queryEnd);
+
+        if (query.trim()) {
+          const snippets = await this.workspaceRetriever.retrieve(query, snippetBudget);
+          if (snippets.length > 0) {
+            const parts = snippets.map(
+              (s) => `--- ${s.path} (score: ${s.score.toFixed(2)}) ---\n${s.content}`,
+            );
+            workspaceSnippets = '[Workspace Context]\n' + parts.join('\n');
+          }
+        }
+      }
+    }
+
+    // 4. Compute token count (approximate: ~4 chars per token)
+    const totalChars =
+      stablePrefix.length + volatileSuffix.length + workspaceSnippets.length;
     const tokenCount = Math.ceil(totalChars / CHARS_PER_TOKEN);
 
-    // 4. Compute cache key from stable prefix
+    // 5. Compute cache key from stable prefix
     const cacheKey = djb2Hash(stablePrefix);
 
     return {
       stablePrefix,
       volatileSuffix,
+      workspaceSnippets,
       tokenCount,
       cacheKey,
     };

@@ -64,17 +64,17 @@ const CASUAL_DOC =
 
 describe('2.3 Context Manager', () => {
   describe('Stable prefix construction', () => {
-    it('should contain system prompt in stable prefix', () => {
+    it('should contain system prompt in stable prefix', async () => {
       const cm = new ContextManager();
-      const ctx = cm.build(SHORT_DOC, 0);
+      const ctx = await cm.build(SHORT_DOC, 0);
 
       expect(ctx.stablePrefix).toContain('InkWell AI');
       expect(ctx.stablePrefix).toContain('writing assistant');
     });
 
-    it('should contain style profile in stable prefix', () => {
+    it('should contain style profile in stable prefix', async () => {
       const cm = new ContextManager();
-      const ctx = cm.build(SHORT_DOC, 0);
+      const ctx = await cm.build(SHORT_DOC, 0);
 
       expect(ctx.stablePrefix).toContain('[Style:');
       expect(ctx.stablePrefix).toMatch(/tone=\w+/);
@@ -83,9 +83,9 @@ describe('2.3 Context Manager', () => {
       expect(ctx.stablePrefix).toMatch(/vocabulary=\w+/);
     });
 
-    it('should contain document outline in stable prefix', () => {
+    it('should contain document outline in stable prefix', async () => {
       const cm = new ContextManager();
-      const ctx = cm.build(HEADED_DOC, 0);
+      const ctx = await cm.build(HEADED_DOC, 0);
 
       expect(ctx.stablePrefix).toContain('[Outline]');
       expect(ctx.stablePrefix).toContain('# Introduction');
@@ -93,9 +93,9 @@ describe('2.3 Context Manager', () => {
       expect(ctx.stablePrefix).toContain('# Conclusion');
     });
 
-    it('should use first N characters as outline fallback when no headers exist', () => {
+    it('should use first N characters as outline fallback when no headers exist', async () => {
       const cm = new ContextManager();
-      const ctx = cm.build(SHORT_DOC, 0);
+      const ctx = await cm.build(SHORT_DOC, 0);
 
       expect(ctx.stablePrefix).toContain('[Outline]');
       expect(ctx.stablePrefix).toContain('Hello world');
@@ -107,36 +107,36 @@ describe('2.3 Context Manager', () => {
   // ---------------------------------------------------------------------------
 
   describe('Volatile suffix from cursor', () => {
-    it('should contain text around cursor position', () => {
+    it('should contain text around cursor position', async () => {
       const doc = 'AAAA BBBB CCCC DDDD EEEE';
       const cursorPos = 10; // between BBBB and CCCC
       const cm = new ContextManager({ windowTokens: 100 });
-      const ctx = cm.build(doc, cursorPos);
+      const ctx = await cm.build(doc, cursorPos);
 
       // volatileSuffix = window.before + window.after
       expect(ctx.volatileSuffix).toContain('AAAA BBBB');
       expect(ctx.volatileSuffix).toContain(' CCCC DDDD');
     });
 
-    it('should change volatile suffix when cursor moves', () => {
+    it('should change volatile suffix when cursor moves', async () => {
       // Build a document with distinct content at different positions
       const doc = 'ALPHA section at the beginning of the doc. ' +
         'BETA section in the middle of the document. ' +
         'GAMMA section at the very end of the doc.';
       const cm = new ContextManager({ windowTokens: 10 }); // 10 tokens = 40 chars window
 
-      const ctx1 = cm.build(doc, 0, 'doc1');
-      const ctx2 = cm.build(doc, doc.length, 'doc2');
+      const ctx1 = await cm.build(doc, 0, 'doc1');
+      const ctx2 = await cm.build(doc, doc.length, 'doc2');
 
       // At position 0, before is empty so suffix starts with ALPHA
       // At end, after is empty so suffix ends with GAMMA
       expect(ctx1.volatileSuffix).not.toEqual(ctx2.volatileSuffix);
     });
 
-    it('should limit volatile suffix to window token budget', () => {
+    it('should limit volatile suffix to window token budget', async () => {
       const longDoc = makeLongDoc(10000);
       const cm = new ContextManager({ windowTokens: 50 });
-      const ctx = cm.build(longDoc, 5000);
+      const ctx = await cm.build(longDoc, 5000);
 
       // 50 tokens * 4 chars/token = 200 chars max (100 before + 100 after)
       expect(ctx.volatileSuffix.length).toBeLessThanOrEqual(200);
@@ -148,27 +148,27 @@ describe('2.3 Context Manager', () => {
   // ---------------------------------------------------------------------------
 
   describe('Token count accuracy', () => {
-    it('should approximate token count at ~4 chars per token', () => {
+    it('should approximate token count at ~4 chars per token', async () => {
       const cm = new ContextManager();
-      const ctx = cm.build(SHORT_DOC, 0);
+      const ctx = await cm.build(SHORT_DOC, 0);
 
-      const totalChars = ctx.stablePrefix.length + ctx.volatileSuffix.length;
+      const totalChars = ctx.stablePrefix.length + ctx.volatileSuffix.length + ctx.workspaceSnippets.length;
       const expectedTokens = Math.ceil(totalChars / CHARS_PER_TOKEN);
 
       expect(ctx.tokenCount).toBe(expectedTokens);
     });
 
-    it('should return positive token count for non-empty document', () => {
+    it('should return positive token count for non-empty document', async () => {
       const cm = new ContextManager();
-      const ctx = cm.build(SHORT_DOC, 10);
+      const ctx = await cm.build(SHORT_DOC, 10);
 
       expect(ctx.tokenCount).toBeGreaterThan(0);
     });
 
-    it('should increase token count with longer document content', () => {
+    it('should increase token count with longer document content', async () => {
       const cm = new ContextManager({ windowTokens: 1000 });
-      const shortCtx = cm.build('Hi.', 0, 'short');
-      const longCtx = cm.build(makeLongDoc(5000), 2500, 'long');
+      const shortCtx = await cm.build('Hi.', 0, 'short');
+      const longCtx = await cm.build(makeLongDoc(5000), 2500, 'long');
 
       expect(longCtx.tokenCount).toBeGreaterThan(shortCtx.tokenCount);
     });
@@ -179,26 +179,26 @@ describe('2.3 Context Manager', () => {
   // ---------------------------------------------------------------------------
 
   describe('Cache key validity', () => {
-    it('should produce a consistent cache key for same stable prefix', () => {
+    it('should produce a consistent cache key for same stable prefix', async () => {
       const cm = new ContextManager();
-      const ctx1 = cm.build(SHORT_DOC, 0);
-      const ctx2 = cm.build(SHORT_DOC, 20); // different cursor, same prefix
+      const ctx1 = await cm.build(SHORT_DOC, 0);
+      const ctx2 = await cm.build(SHORT_DOC, 20); // different cursor, same prefix
 
       // Same document content => same stable prefix => same cache key
       expect(ctx1.cacheKey).toBe(ctx2.cacheKey);
     });
 
-    it('should produce different cache keys for different documents', () => {
+    it('should produce different cache keys for different documents', async () => {
       const cm = new ContextManager();
-      const ctx1 = cm.build(FORMAL_DOC, 0, 'doc1');
-      const ctx2 = cm.build(CASUAL_DOC, 0, 'doc2');
+      const ctx1 = await cm.build(FORMAL_DOC, 0, 'doc1');
+      const ctx2 = await cm.build(CASUAL_DOC, 0, 'doc2');
 
       expect(ctx1.cacheKey).not.toBe(ctx2.cacheKey);
     });
 
-    it('should produce a non-empty hex string as cache key', () => {
+    it('should produce a non-empty hex string as cache key', async () => {
       const cm = new ContextManager();
-      const ctx = cm.build(SHORT_DOC, 0);
+      const ctx = await cm.build(SHORT_DOC, 0);
 
       expect(ctx.cacheKey).toMatch(/^[0-9a-f]+$/);
       expect(ctx.cacheKey.length).toBeGreaterThan(0);
@@ -482,9 +482,9 @@ describe('2.3 Context Manager', () => {
   // ---------------------------------------------------------------------------
 
   describe('Context build with empty document', () => {
-    it('should handle empty document gracefully', () => {
+    it('should handle empty document gracefully', async () => {
       const cm = new ContextManager();
-      const ctx = cm.build('', 0);
+      const ctx = await cm.build('', 0);
 
       expect(ctx.stablePrefix).toBeTruthy();
       expect(ctx.stablePrefix).toContain('InkWell AI');
@@ -493,28 +493,28 @@ describe('2.3 Context Manager', () => {
       expect(ctx.cacheKey).toMatch(/^[0-9a-f]+$/);
     });
 
-    it('should have empty volatile suffix for empty document', () => {
+    it('should have empty volatile suffix for empty document', async () => {
       const cm = new ContextManager();
-      const ctx = cm.build('', 0);
+      const ctx = await cm.build('', 0);
 
       expect(ctx.volatileSuffix).toBe('');
     });
   });
 
   describe('Context build with long document', () => {
-    it('should limit volatile suffix via sliding window', () => {
+    it('should limit volatile suffix via sliding window', async () => {
       const longDoc = makeLongDoc(100000);
       const cm = new ContextManager({ windowTokens: 100 });
-      const ctx = cm.build(longDoc, 50000);
+      const ctx = await cm.build(longDoc, 50000);
 
       // 100 tokens * 4 chars/token = 400 chars max for volatile suffix
       expect(ctx.volatileSuffix.length).toBeLessThanOrEqual(400);
     });
 
-    it('should still include full stable prefix for long document', () => {
+    it('should still include full stable prefix for long document', async () => {
       const longDoc = makeLongDoc(100000);
       const cm = new ContextManager({ windowTokens: 100 });
-      const ctx = cm.build(longDoc, 50000);
+      const ctx = await cm.build(longDoc, 50000);
 
       expect(ctx.stablePrefix).toContain('InkWell AI');
       expect(ctx.stablePrefix).toContain('[Style:');
@@ -526,12 +526,12 @@ describe('2.3 Context Manager', () => {
   // ---------------------------------------------------------------------------
 
   describe('ContextManager with injected PrefixCache', () => {
-    it('should use the provided PrefixCache instance', () => {
+    it('should use the provided PrefixCache instance', async () => {
       const cache = new PrefixCache();
       const cm = new ContextManager({ prefixCache: cache });
 
       // Build once to populate cache
-      cm.build(SHORT_DOC, 0, 'myDoc');
+      await cm.build(SHORT_DOC, 0, 'myDoc');
 
       // The cache should have been populated
       const computeFn = vi.fn(() => 'should-not-be-called');
@@ -542,15 +542,15 @@ describe('2.3 Context Manager', () => {
       expect(cached).toContain('InkWell AI');
     });
 
-    it('should rebuild prefix after invalidation via ContextManager', () => {
+    it('should rebuild prefix after invalidation via ContextManager', async () => {
       const cache = new PrefixCache();
       const cm = new ContextManager({ prefixCache: cache });
 
-      const ctx1 = cm.build(SHORT_DOC, 0, 'myDoc');
+      const ctx1 = await cm.build(SHORT_DOC, 0, 'myDoc');
       cm.invalidatePrefix('myDoc');
 
       // Build again with different content but same docId
-      const ctx2 = cm.build(FORMAL_DOC, 0, 'myDoc');
+      const ctx2 = await cm.build(FORMAL_DOC, 0, 'myDoc');
 
       // The stable prefixes should differ because the document changed
       // and the cache was invalidated
@@ -563,19 +563,28 @@ describe('2.3 Context Manager', () => {
   // ---------------------------------------------------------------------------
 
   describe('DocumentContext shape', () => {
-    it('should return an object with all required fields', () => {
+    it('should return an object with all required fields', async () => {
       const cm = new ContextManager();
-      const ctx = cm.build(SHORT_DOC, 10);
+      const ctx = await cm.build(SHORT_DOC, 10);
 
       expect(ctx).toHaveProperty('stablePrefix');
       expect(ctx).toHaveProperty('volatileSuffix');
+      expect(ctx).toHaveProperty('workspaceSnippets');
       expect(ctx).toHaveProperty('tokenCount');
       expect(ctx).toHaveProperty('cacheKey');
 
       expect(typeof ctx.stablePrefix).toBe('string');
       expect(typeof ctx.volatileSuffix).toBe('string');
+      expect(typeof ctx.workspaceSnippets).toBe('string');
       expect(typeof ctx.tokenCount).toBe('number');
       expect(typeof ctx.cacheKey).toBe('string');
+    });
+
+    it('should have empty workspaceSnippets when no retriever is configured', async () => {
+      const cm = new ContextManager();
+      const ctx = await cm.build(SHORT_DOC, 10);
+
+      expect(ctx.workspaceSnippets).toBe('');
     });
   });
 });

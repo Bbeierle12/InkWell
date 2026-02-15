@@ -1,24 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { chunkDocument } from '../chunker.js';
 import { VectorStore } from '../vector-store.js';
-
-/**
- * Simple bag-of-words embedding: hash tokens into a 384-dim normalized vector.
- */
-function simpleEmbed(text: string): number[] {
-  const vec = new Array(384).fill(0);
-  const tokens = text.toLowerCase().split(/\s+/).filter(Boolean);
-  for (const token of tokens) {
-    let hash = 0;
-    for (let i = 0; i < token.length; i++) {
-      hash = ((hash << 5) - hash + token.charCodeAt(i)) | 0;
-    }
-    vec[Math.abs(hash) % 384] += 1;
-  }
-  const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
-  if (norm > 0) for (let i = 0; i < vec.length; i++) vec[i] /= norm;
-  return vec;
-}
+import { simpleEmbed } from '../embed.js';
 
 /**
  * 5.1 Workspace Indexing Tests
@@ -47,7 +30,7 @@ describe('5.1 Workspace Indexing', () => {
 
     for (const chunk of chunks) {
       const vector = simpleEmbed(chunk.content);
-      await store.insert(chunk.id, vector, chunk.metadata);
+      await store.insert(chunk.id, vector, chunk.metadata, chunk.content);
     }
 
     // Search for content related to what we just indexed
@@ -71,14 +54,14 @@ describe('5.1 Workspace Indexing', () => {
     const oldChunks = chunkDocument(oldContent, path);
     for (const chunk of oldChunks) {
       const vector = simpleEmbed(chunk.content);
-      await store.insert(chunk.id, vector, chunk.metadata);
+      await store.insert(chunk.id, vector, chunk.metadata, chunk.content);
     }
 
     // Now "update" by inserting new content for the same path
     const newChunks = chunkDocument(newContent, path);
     for (const chunk of newChunks) {
       const vector = simpleEmbed(chunk.content);
-      await store.insert(chunk.id, vector, chunk.metadata);
+      await store.insert(chunk.id, vector, chunk.metadata, chunk.content);
     }
 
     // Search for the new content terms
@@ -110,7 +93,7 @@ describe('5.1 Workspace Indexing', () => {
     const content = 'Temporary file content that will be conceptually deleted.';
     const chunks = chunkDocument(content, 'temp/file.md');
     for (const chunk of chunks) {
-      await store.insert(chunk.id, simpleEmbed(chunk.content), chunk.metadata);
+      await store.insert(chunk.id, simpleEmbed(chunk.content), chunk.metadata, chunk.content);
     }
 
     const afterInsert = await store.search(simpleEmbed(content), 10);

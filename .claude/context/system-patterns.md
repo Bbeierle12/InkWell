@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-15T00:16:36Z
-version: 2.0
+last_updated: 2026-02-15T01:20:41Z
+version: 2.1
 author: Claude Code PM System
 ---
 
@@ -43,11 +43,13 @@ DocumentAI uses a priority queue for AI requests:
 - All requests carry AbortControllers; `cancelAll()` aborts everything (Invariant #6)
 - `teardown()` ensures no orphaned callbacks or timers after close (Invariant #7)
 
-### 5. Stable/Volatile Prompt Splitting [IMPLEMENTED + TESTED]
-Prompts are split into two parts for Claude's prompt caching:
-- `ContextManager.build()` produces `DocumentContext` with stable prefix and volatile suffix
+### 5. Stable/Volatile Prompt Splitting + Workspace Context [IMPLEMENTED + TESTED]
+Prompts are split into two parts for Claude's prompt caching, with optional workspace snippets:
+- `ContextManager.build()` is async, produces `DocumentContext` with stable prefix, volatile suffix, and workspace snippets
+- When `WorkspaceRetriever` is configured and `tokenBudget` provided, retrieves cross-document snippets (20% of remaining budget via `WORKSPACE_SNIPPET_RATIO`)
+- Formatted as `[Workspace Context]` header with file paths and relevance scores
 - `PrefixCache` memoizes stable prefix per document with invalidation
-- `analyzeStyle()` computes formality/tone/vocabulary heuristics (47 tests)
+- `analyzeStyle()` computes formality/tone/vocabulary heuristics (47+ tests)
 - `slidingWindow()` extracts cursor-relative context within token budget
 
 ### 6. Privacy Canary Pattern [IMPLEMENTED + TESTED]
@@ -152,9 +154,20 @@ MCP workspace context layer provides AI with document awareness:
 ### 12. Document Chunking + Vector Search [IMPLEMENTED + TESTED]
 Documents are split and indexed for retrieval:
 - `chunkDocument()`: sliding window with configurable overlap (default 500 chars, 50 overlap) (8 tests)
-- `VectorStore`: SQLite-backed with optional sqlite-vec extension; graceful fallback on Windows (9 tests)
-- `simpleEmbed()`: bag-of-words hash → 384-dim normalized vector for testing
+- `VectorStore`: SQLite-backed with optional sqlite-vec extension; graceful fallback on Windows; stores content alongside vectors (9 tests)
+- `simpleEmbed()`: bag-of-words hash → 384-dim normalized vector, extracted to `indexer/embed.ts` shared module (Decision 8-1)
 - `FileWatcher`: injectable fs module via constructor for testability (6 tests)
+- `WorkspaceIndexer`: orchestrator wiring FileWatcher + chunker + simpleEmbed + VectorStore, implements `WorkspaceRetriever` interface (8 tests)
+
+### 18. Workspace Context Integration [IMPLEMENTED + TESTED]
+MCP workspace retrieval is wired into the DocumentAI pipeline for cross-document context:
+- `WorkspaceRetriever` interface: `retrieve(query, maxTokens) → Promise<WorkspaceSnippet[]>` (shared types)
+- `WorkspaceIndexer` implements `WorkspaceRetriever` — indexes documents, retrieves relevant snippets within token budget
+- `ContextManager` accepts optional `WorkspaceRetriever`; when present, allocates 20% of token budget for workspace snippets
+- `DocumentAIServiceImpl` passes `workspaceRetriever` to ContextManager, includes formatted snippets in Claude request context
+- Formatted output: `[Workspace Context]` header, per-snippet `--- path (score: X.XX) ---` sections
+- Local-target operations (InlineSuggest) skip workspace retrieval
+- 7 integration tests including MSW-captured Claude request verification
 
 ### 13. Voice Pipeline [FULLY IMPLEMENTED + TESTED]
 Full voice-to-document pipeline: speak → transcribe locally via Whisper → refine with Claude → insert into document:

@@ -1,23 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { VectorStore } from '../vector-store.js';
-
-/**
- * Simple bag-of-words embedding: hash tokens into a 384-dim normalized vector.
- */
-function simpleEmbed(text: string): number[] {
-  const vec = new Array(384).fill(0);
-  const tokens = text.toLowerCase().split(/\s+/).filter(Boolean);
-  for (const token of tokens) {
-    let hash = 0;
-    for (let i = 0; i < token.length; i++) {
-      hash = ((hash << 5) - hash + token.charCodeAt(i)) | 0;
-    }
-    vec[Math.abs(hash) % 384] += 1;
-  }
-  const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
-  if (norm > 0) for (let i = 0; i < vec.length; i++) vec[i] /= norm;
-  return vec;
-}
+import { simpleEmbed } from '../embed.js';
 
 /** Helper to generate a stable chunk ID from an index. */
 function chunkId(index: number): string {
@@ -48,7 +31,7 @@ describe('5.2 Retrieval Quality', () => {
       await store.insert(item.id, vector, {
         topic: item.topic,
         text: item.text,
-      });
+      }, item.text);
     }
   });
 
@@ -111,6 +94,7 @@ describe('5.2 Retrieval Quality', () => {
     for (const result of results) {
       expect(result.id).toBeTruthy();
       expect(result.metadata).toBeDefined();
+      expect(typeof result.content).toBe('string');
       // distance is either a number (vec available) or null (fallback)
       expect(
         typeof result.distance === 'number' || result.distance === null,

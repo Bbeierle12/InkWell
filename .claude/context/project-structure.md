@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-15T00:16:36Z
-version: 1.9
+last_updated: 2026-02-15T01:20:41Z
+version: 2.0
 author: Claude Code PM System
 ---
 
@@ -48,7 +48,7 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │   │           ├── index.ts      # clampPosition, safeInsertText, safeDelete, etc.
 │   │           └── __tests__/    # integrity.test.ts (9), integrity.property.test.ts (3)
 │   │
-│   ├── document-ai/             # @inkwell/document-ai (295 tests)
+│   ├── document-ai/             # @inkwell/document-ai (303 tests)
 │   │   └── src/
 │   │       ├── router/          # Model routing with network awareness [IMPLEMENTED]
 │   │       │   ├── index.ts     # ModelRouter: setOnline/isOnline, CloudUnavailableError
@@ -79,30 +79,32 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │   │       │   ├── response-parser.ts  # parseAIResponse(), collectAndParse()
 │   │       │   ├── token-counter.ts    # estimateTokens() + countTokens() (API with fallback)
 │   │       │   └── __tests__/   # contract.test.ts (6), stream-errors.test.ts (8), stop-reason.test.ts (3), response-parser.test.ts (6), token-counter.test.ts (4)
-│   │       ├── service.ts       # DocumentAIServiceImpl orchestration [IMPLEMENTED] (+ VoiceRefine raw text path)
-│   │       ├── __tests__/       # service.test.ts (5), voice-refine.test.ts (4)
+│   │       ├── service.ts       # DocumentAIServiceImpl orchestration [IMPLEMENTED] (+ VoiceRefine + workspace snippets)
+│   │       ├── __tests__/       # service.test.ts (5), voice-refine.test.ts (4), workspace-integration.test.ts (7)
 │   │       ├── test-setup.ts    # MSW server + privacy canary interceptor
-│   │       └── types.ts         # DocumentAIService interface
+│   │       └── types.ts         # DocumentAIService interface (async buildContext)
 │   │
-│   └── mcp-workspace/           # @inkwell/mcp-workspace (55 tests)
+│   └── mcp-workspace/           # @inkwell/mcp-workspace (63 tests)
 │       └── src/
 │           ├── server.ts         # MCP server factory (McpServer + 4 tools) [IMPLEMENTED]
 │           ├── tools/            # 4 MCP tools [IMPLEMENTED]
-│           │   ├── workspace-search.ts    # Vector search with simpleEmbed
+│           │   ├── workspace-search.ts    # Vector search (imports simpleEmbed from indexer/embed)
 │           │   ├── workspace-watch.ts     # FileWatcher delegation
 │           │   ├── document-analyze.ts    # Text structure analysis
 │           │   ├── document-style-guide.ts # Style heuristics
 │           │   └── __tests__/tools.test.ts (10)
 │           ├── indexer/          # [IMPLEMENTED]
 │           │   ├── chunker.ts             # Sliding window chunking
-│           │   ├── vector-store.ts        # SQLite + sqlite-vec (graceful fallback)
+│           │   ├── vector-store.ts        # SQLite + sqlite-vec (graceful fallback, content storage)
 │           │   ├── file-watcher.ts        # Injectable fs module
+│           │   ├── embed.ts               # simpleEmbed() — 384-dim bag-of-words hash (Decision 8-1)
+│           │   ├── workspace-indexer.ts   # WorkspaceIndexer: FileWatcher + chunker + embed + VectorStore
 │           │   └── __tests__/   # chunker (8), vector-store (9), file-watcher (6), indexer (4), retrieval (3)
 │           ├── protocol/         # [IMPLEMENTED]
 │           │   ├── adapter.ts             # MCP version + JSON-RPC validation
 │           │   └── __tests__/   # adapter (6), compliance (4)
-│           ├── __tests__/server.test.ts (5)
-│           └── index.ts          # Expanded barrel exports
+│           ├── __tests__/server.test.ts (5), workspace-indexer.test.ts (8)
+│           └── index.ts          # Expanded barrel exports (+ WorkspaceIndexer, simpleEmbed)
 │
 ├── apps/
 │   ├── web/                     # @inkwell/web (24 tests)

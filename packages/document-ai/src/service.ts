@@ -7,9 +7,11 @@
 import {
   OperationType,
   ModelTarget,
+  TOKEN_BUDGETS,
   type DocumentContext,
   type QueuedRequest,
   type AIEditInstruction,
+  type WorkspaceRetriever,
 } from '@inkwell/shared';
 import type { DocumentAIService, LocalInferenceProvider } from './types';
 import type { RoutingResult } from './router/types';
@@ -24,6 +26,7 @@ export interface DocumentAIServiceOptions {
   baseUrl?: string;
   isPrivate?: boolean;
   localProvider?: LocalInferenceProvider;
+  workspaceRetriever?: WorkspaceRetriever;
 }
 
 export interface AIOperationRequest {
@@ -42,6 +45,20 @@ export interface AIOperationResult {
   model: ModelTarget;
 }
 
+/**
+ * Determine the token budget for a given operation type.
+ */
+function getTokenBudget(operation: OperationType): number {
+  switch (operation) {
+    case OperationType.InlineSuggest:
+      return TOKEN_BUDGETS.inline;
+    case OperationType.Critique:
+      return TOKEN_BUDGETS.critique;
+    default:
+      return TOKEN_BUDGETS.documentOps;
+  }
+}
+
 export class DocumentAIServiceImpl implements DocumentAIService {
   private router: ModelRouter;
   private context: ContextManager;
@@ -52,7 +69,9 @@ export class DocumentAIServiceImpl implements DocumentAIService {
 
   constructor(options: DocumentAIServiceOptions) {
     this.router = new ModelRouter();
-    this.context = new ContextManager();
+    this.context = new ContextManager({
+      workspaceRetriever: options.workspaceRetriever,
+    });
     this.client = new ClaudeClient({
       apiKey: options.apiKey,
       baseUrl: options.baseUrl,
@@ -70,7 +89,7 @@ export class DocumentAIServiceImpl implements DocumentAIService {
     void request;
   }
 
-  buildContext(docContent: string, cursorPos: number): DocumentContext {
+  async buildContext(docContent: string, cursorPos: number): Promise<DocumentContext> {
     return this.context.build(docContent, cursorPos);
   }
 
@@ -95,11 +114,17 @@ export class DocumentAIServiceImpl implements DocumentAIService {
 
     // 1. Route
     const routing: RoutingResult = this.router.route(request.operation, this.isPrivate);
+    const tokenBudget = getTokenBudget(request.operation);
 
     // For local-only targets, delegate to local provider if available
     if (routing.target === ModelTarget.Local) {
       if (this.localProvider?.isAvailable()) {
-        const ctx = this.context.build(request.docContent, request.cursorPos, request.docId);
+        const ctx = await this.context.build(
+          request.docContent,
+          request.cursorPos,
+          request.docId,
+          tokenBudget,
+        );
         const prompt = ctx.stablePrefix + '\n\n' + ctx.volatileSuffix;
         const result = await this.localProvider.generate(prompt, 128);
         return {
@@ -112,12 +137,20 @@ export class DocumentAIServiceImpl implements DocumentAIService {
     }
 
     // 2. Build context
-    const ctx = this.context.build(request.docContent, request.cursorPos, request.docId);
+    const ctx = await this.context.build(
+      request.docContent,
+      request.cursorPos,
+      request.docId,
+      tokenBudget,
+    );
 
     // 3. Render prompt
     const template = getPromptTemplate(request.operation);
+    const documentContext = ctx.workspaceSnippets
+      ? ctx.stablePrefix + '\n\n' + ctx.workspaceSnippets + '\n\n' + ctx.volatileSuffix
+      : ctx.stablePrefix + '\n\n' + ctx.volatileSuffix;
     const vars: Record<string, string> = {
-      document_context: ctx.stablePrefix + '\n\n' + ctx.volatileSuffix,
+      document_context: documentContext,
       selection: request.selection?.text ?? '',
     };
     if (request.targetTone) {

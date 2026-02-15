@@ -11,6 +11,7 @@ import Database from 'better-sqlite3';
 /** Shape of results returned from search queries. */
 export interface VectorSearchResult {
   id: string;
+  content: string;
   metadata: unknown;
   distance: number | null;
 }
@@ -88,11 +89,13 @@ export class VectorStore {
    * @param chunkId  Unique identifier for the chunk.
    * @param vector   Embedding vector (float array, typically 384 dimensions).
    * @param metadata Arbitrary metadata object (will be JSON-serialized).
+   * @param content  Optional chunk text content for retrieval (default '').
    */
   async insert(
     chunkId: string,
     vector: number[],
     metadata: unknown,
+    content: string = '',
   ): Promise<void> {
     this.ensureInitialized();
 
@@ -101,7 +104,7 @@ export class VectorStore {
     // Insert or replace into the chunks metadata table
     this.db!.prepare(
       'INSERT OR REPLACE INTO chunks (id, content, metadata) VALUES (?, ?, ?)',
-    ).run(chunkId, '', metadataJson);
+    ).run(chunkId, content, metadataJson);
 
     // Insert into vector table if available
     if (this.vecAvailable) {
@@ -137,7 +140,7 @@ export class VectorStore {
       try {
         const vectorJson = JSON.stringify(queryVector);
         const rows = this.db!.prepare(
-          `SELECT c.id, c.metadata, v.distance
+          `SELECT c.id, c.content, c.metadata, v.distance
            FROM vec_chunks v
            INNER JOIN chunks c ON c.rowid = v.rowid
            WHERE v.embedding MATCH ?
@@ -145,12 +148,14 @@ export class VectorStore {
            LIMIT ?`,
         ).all(vectorJson, limit) as Array<{
           id: string;
+          content: string;
           metadata: string;
           distance: number;
         }>;
 
         return rows.map((row) => ({
           id: row.id,
+          content: row.content ?? '',
           metadata: JSON.parse(row.metadata),
           distance: row.distance,
         }));
@@ -161,11 +166,12 @@ export class VectorStore {
 
     // Fallback: return all chunks up to limit without distance ranking
     const rows = this.db!.prepare(
-      'SELECT id, metadata FROM chunks LIMIT ?',
-    ).all(limit) as Array<{ id: string; metadata: string }>;
+      'SELECT id, content, metadata FROM chunks LIMIT ?',
+    ).all(limit) as Array<{ id: string; content: string; metadata: string }>;
 
     return rows.map((row) => ({
       id: row.id,
+      content: row.content ?? '',
       metadata: JSON.parse(row.metadata),
       distance: null,
     }));

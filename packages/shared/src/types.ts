@@ -46,6 +46,8 @@ export interface DocumentContext {
   stablePrefix: string;
   /** Current paragraph + local breadcrumbs (volatile). */
   volatileSuffix: string;
+  /** Formatted workspace snippets from related documents (or empty string). */
+  workspaceSnippets: string;
   /** Total token count for this context payload. */
   tokenCount: number;
   /** Hash key for prompt-cache lookup. */
@@ -97,6 +99,18 @@ export interface StyleGuideResult {
 export interface MCPServerConfig {
   dbPath?: string;
   watchDirectories?: string[];
+}
+
+/** A snippet retrieved from a related workspace document. */
+export interface WorkspaceSnippet {
+  content: string;
+  path: string;
+  score: number;
+}
+
+/** Interface for retrieving cross-document context from the workspace. */
+export interface WorkspaceRetriever {
+  retrieve(query: string, maxTokens: number): Promise<WorkspaceSnippet[]>;
 }
 
 // --- Reconciler Result Types ---

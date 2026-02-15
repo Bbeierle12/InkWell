@@ -1,15 +1,15 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-15T00:16:36Z
-version: 2.2
+last_updated: 2026-02-15T01:20:41Z
+version: 2.3
 author: Claude Code PM System
 ---
 
 # Progress: Inkwell
 
-## Current Status: Phase 7 Voice Pipeline — Fully Implemented
+## Current Status: Phase 8 MCP Workspace Context Integration — Fully Implemented
 
-Phases 1-5 TDD scaffolding and implementation complete. Phase 7 voice pipeline fully implemented: VoiceRefine prompt template, DocumentAI service VoiceRefine path (raw text return), Tauri `transcribe_audio_bytes` Rust command (accepts `Vec<f32>` directly), `transcribeAudioBytes` TS bridge function, `audio-capture.ts` PCM mic capture utility (16kHz mono with resampling), full `useVoicePipeline` hook orchestrator (FSM transitions, AbortController cancellation, offline fallback), `VoiceInput` component (state-driven UI with timer, ARIA), and Editor integration. All 412 tests pass (334 TS + 78 Rust).
+Phases 1-5 TDD scaffolding and implementation complete. Phase 7 voice pipeline complete. Phase 8 wires MCP workspace retrieval into the DocumentAI runtime: `WorkspaceRetriever` interface and `WorkspaceSnippet` type in shared, `WorkspaceIndexer` orchestrator (FileWatcher + chunker + simpleEmbed + VectorStore), async `ContextManager.build()` with workspace snippet retrieval and token budget allocation (20% of remaining budget), `DocumentAIServiceImpl` includes workspace snippets in Claude requests, VectorStore content storage fix, `simpleEmbed()` extracted to shared module. All 690 tests pass (612 TS + 78 Rust).
 
 ## Completed Work
 
@@ -235,6 +235,48 @@ Phases 1-5 TDD scaffolding and implementation complete. Phase 7 voice pipeline f
 - `useGhostText.ts`: Full hook — debounced inline suggestions, accept/dismiss
 - `Editor.tsx`: TipTap useEditor with StarterKit + GhostText + DiffPreview + AIUndo + SlashCommands
 
+### Phase 8 — MCP Workspace Context Integration (2026-02-15)
+
+**Decision 8-1: Embedding Strategy — Option A: Bag-of-words hash embedding (`simpleEmbed`)**
+- Already implemented and tested in Phase 5. No new dependencies. Adequate for keyword-overlap retrieval.
+- Semantic quality upgradeable later by swapping `WorkspaceRetriever` implementation.
+
+**Shared Types + Constants**
+- `WorkspaceSnippet { content, path, score }` and `WorkspaceRetriever { retrieve(query, maxTokens) }` interfaces
+- `workspaceSnippets: string` field added to `DocumentContext`
+- `WORKSPACE_SNIPPET_RATIO = 0.2` constant (20% of remaining token budget)
+
+**VectorStore Content Storage Fix**
+- Added `content: string` to `VectorSearchResult` interface and `insert()` method (backward compatible default `''`)
+- Updated `search()` SQL to SELECT and return content in both vec and fallback paths
+
+**simpleEmbed Extraction**
+- Moved `simpleEmbed()` from `workspace-search.ts` to new `indexer/embed.ts` shared module
+- Updated `workspace-search.ts` to import from shared module and return `r.content`
+
+**WorkspaceIndexer (NEW)**
+- Orchestrator implementing `WorkspaceRetriever`: FileWatcher + chunker + simpleEmbed + VectorStore
+- `indexDocument(path, content)` — chunk, embed, insert with content
+- `retrieve(query, maxTokens)` — embed query, search (limit 10), accumulate within token budget (~4 chars/token)
+- `initialize(dbPath)`, `close()`, `onFileChange(path)` lifecycle methods
+
+**ContextManager Async + Workspace Retrieval**
+- `build()` now async: `async build(docContent, cursorPos, docId?, tokenBudget?): Promise<DocumentContext>`
+- When retriever present AND tokenBudget provided: computes snippet budget, queries retriever, formats snippets with `[Workspace Context]` header and file paths/scores
+- Token count includes workspace snippet length
+
+**DocumentAIServiceImpl Workspace Integration**
+- Added `workspaceRetriever?: WorkspaceRetriever` to options
+- `getTokenBudget()` helper maps operation types to TOKEN_BUDGETS
+- All `build()` calls awaited with tokenBudget; workspace snippets included in Claude request context
+- `buildContext()` return type → `Promise<DocumentContext>`
+
+**Tests (15 new + ~30 async conversions)**
+- `workspace-indexer.test.ts` (8 tests): indexDocument, retrieve sorted by score, token budget, empty query, zero budget, no docs, throws before init, close resources
+- `workspace-integration.test.ts` (7 tests): snippets included, no retriever = empty, no budget = empty, token count includes snippets, query passed to retriever, snippets in Claude request (MSW capture), Local target skips retrieval
+- ~30 existing `cm.build()` calls in context.test.ts made async
+- indexer.test.ts and retrieval.test.ts updated to pass content to `insert()` and import from `embed.ts`
+
 ### Implementation Phase 7 — Voice Pipeline (2026-02-15)
 
 **VoiceRefine Prompt Template**
@@ -290,12 +332,12 @@ Phases 1-5 TDD scaffolding and implementation complete. Phase 7 voice pipeline f
 |-------|--------|
 | `@inkwell/shared` tests | 15 passed (2 test files) |
 | `@inkwell/editor` tests | 190 passed (10 test files) |
-| `@inkwell/document-ai` tests | 295 passed (15 test files) |
+| `@inkwell/document-ai` tests | 303 passed (16 test files) |
 | `@inkwell/web` tests | 24 passed (4 test files) |
-| `@inkwell/mcp-workspace` tests | 55 passed (9 test files) |
+| `@inkwell/mcp-workspace` tests | 63 passed (10 test files) |
 | `@inkwell/evals` tests | 18 passed (2 test files) |
 | `inkwell-desktop` Rust tests | 78 passed (0 warnings) |
-| **Total tests** | **675 passed, 0 failed** |
+| **Total tests** | **691 passed, 0 failed** |
 | Typecheck (shared) | Clean |
 | Typecheck (mcp-workspace) | Clean |
 | Typecheck (evals) | Clean |
@@ -336,3 +378,4 @@ Phases 1-5 TDD scaffolding and implementation complete. Phase 7 voice pipeline f
 - 2026-02-14T21:14:34Z: All phases committed to main (6 commits). Working tree clean. Ready for E2E/eval phase.
 - 2026-02-14T22:06:59Z: Desktop runtime session — Fixed Tailwind v4 PostCSS plugin, updated llama-cpp-2 to v0.1.133 API, split Cargo features (local-llm/local-stt), added build.rs/icon/frontendDist path fix, installed LLVM for bindgen. 73 Rust tests pass. Desktop app launches with real Next.js frontend.
 - 2026-02-15T00:16:36Z: Phase 7 Voice Pipeline — VoiceRefine prompt, service VoiceRefine path, Tauri transcribe_audio_bytes command, audio-capture utility, useVoicePipeline hook, VoiceInput component, Editor integration. 675 tests pass (597 TS + 78 Rust).
+- 2026-02-15T01:20:41Z: Phase 8 MCP Workspace Context Integration — WorkspaceRetriever interface, WorkspaceIndexer orchestrator, async ContextManager.build() with workspace snippet retrieval, DocumentAIServiceImpl workspace integration, VectorStore content fix, simpleEmbed extraction. 691 tests pass (613 TS + 78 Rust).

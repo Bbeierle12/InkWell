@@ -6,6 +6,7 @@
 
 import type { SearchResult } from '@inkwell/shared';
 import type { VectorStore } from '../indexer/vector-store';
+import { simpleEmbed } from '../indexer/embed';
 
 /**
  * Search the workspace for documents matching a query.
@@ -29,28 +30,8 @@ export async function workspaceSearch(
 
   return results.map((r) => ({
     chunkId: r.id,
-    content: '',
+    content: r.content,
     score: r.distance != null ? 1 / (1 + r.distance) : 0,
     metadata: r.metadata as { path: string; offset: number; length: number },
   }));
-}
-
-/**
- * Create a simple 384-dimensional embedding from text using
- * a bag-of-words hash approach.
- */
-function simpleEmbed(text: string): number[] {
-  const vec = new Array(384).fill(0);
-  const tokens = text.toLowerCase().split(/\s+/).filter(Boolean);
-  for (const token of tokens) {
-    let hash = 0;
-    for (let i = 0; i < token.length; i++) {
-      hash = ((hash << 5) - hash + token.charCodeAt(i)) | 0;
-    }
-    vec[Math.abs(hash) % 384] += 1;
-  }
-  // Normalize
-  const norm = Math.sqrt(vec.reduce((s, v) => s + v * v, 0));
-  if (norm > 0) for (let i = 0; i < vec.length; i++) vec[i] /= norm;
-  return vec;
 }

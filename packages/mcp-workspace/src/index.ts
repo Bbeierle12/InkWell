@@ -9,6 +9,8 @@ export { createMCPServer } from './server';
 export { chunkDocument, type Chunk } from './indexer/chunker';
 export { VectorStore, type VectorSearchResult } from './indexer/vector-store';
 export { FileWatcher } from './indexer/file-watcher';
+export { simpleEmbed } from './indexer/embed';
+export { WorkspaceIndexer } from './indexer/workspace-indexer';
 export { MCPAdapter } from './protocol/adapter';
 export { workspaceSearch } from './tools/workspace-search';
 export { workspaceWatch } from './tools/workspace-watch';

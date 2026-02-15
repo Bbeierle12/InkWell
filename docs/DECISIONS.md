@@ -144,3 +144,50 @@ Which quantized LLM should Inkwell use as the default local model for inline sug
 
 - Feature-gated Criterion benchmarks measure TTFT and tokens/sec with real models
 - Manual E2E test: load model via Tauri dev, type in editor, verify ghost text appears within target latency
+
+---
+
+## Decision 8-1: Embedding Strategy
+
+**Date:** 2026-02-15T00:48:02Z
+**Status:** Decided
+**Context:** Phase 8 — MCP Workspace Context Integration
+
+### Problem
+
+How should workspace documents be embedded for cross-document retrieval? The MCP workspace server needs to convert document chunks into vectors for similarity search, and these vectors feed into the DocumentAI context pipeline.
+
+### Options Evaluated
+
+| Option | Description | Pros | Cons |
+|--------|-------------|------|------|
+| A | Bag-of-words hash embedding (`simpleEmbed`) — 384-dim, L2-normalized | Already implemented and tested; no new dependencies; zero latency; adequate for keyword-overlap retrieval | No semantic understanding; misses synonyms and paraphrases |
+| B | Local transformer embedding (e.g., all-MiniLM-L6-v2) | True semantic similarity; handles synonyms | Requires ONNX runtime or similar; adds ~80MB dependency; 50-100ms per chunk |
+| C | Cloud embedding API (e.g., Anthropic/OpenAI embeddings) | Best quality; no local compute | Network latency; cost per call; privacy implications for local-only mode |
+
+### Decision
+
+**Option A: Bag-of-words hash embedding (`simpleEmbed`).**
+
+### Rationale
+
+1. **Already implemented and tested.** The `simpleEmbed()` function exists in `workspace-search.ts` and is validated by 55+ tests in `mcp-workspace`. No new code or dependencies are needed for the embedding itself.
+
+2. **No new dependencies.** Options B and C add significant dependencies (ONNX runtime or network calls). For an MVP integration, the bag-of-words approach keeps the dependency graph clean.
+
+3. **Adequate for keyword-overlap retrieval.** Cross-document context retrieval in a writing tool primarily benefits from keyword overlap (same terms, same topics). True semantic similarity is a nice-to-have, not a requirement for Phase 8.
+
+4. **Swappable via `WorkspaceRetriever` interface.** The `ContextManager` and `DocumentAIService` depend on the `WorkspaceRetriever` interface, not on `simpleEmbed` directly. Upgrading to a transformer-based embedding later requires only a new `WorkspaceRetriever` implementation — no changes to the AI pipeline.
+
+### Consequences
+
+- `simpleEmbed()` is extracted to `packages/mcp-workspace/src/indexer/embed.ts` as a shared module
+- `WorkspaceRetriever` interface in `@inkwell/shared` abstracts retrieval from embedding strategy
+- Semantic quality can be upgraded later by swapping the `WorkspaceRetriever` implementation
+- No additional runtime dependencies for Phase 8
+
+### Validation
+
+- Existing retrieval quality tests (`retrieval.test.ts`) confirm keyword-overlap accuracy
+- New `WorkspaceIndexer` tests validate end-to-end chunk → embed → store → retrieve pipeline
+- Integration tests verify workspace snippets appear in Claude requests

@@ -30,6 +30,9 @@ export const TTFT_TARGET_LOCAL_MS = 200;
 /** Target time-to-first-token for cloud inference (ms). */
 export const TTFT_TARGET_CLOUD_MS = 1500;
 
+/** Fraction of remaining token budget allocated to workspace snippets. */
+export const WORKSPACE_SNIPPET_RATIO = 0.2;
+
 /** The 14 tracked system invariants. */
 export const INVARIANT_IDS = [
   'schema-valid-after-operation',

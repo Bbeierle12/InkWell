@@ -29,8 +29,8 @@ describe('DocumentAIServiceImpl', () => {
     expect(service.route(OperationType.InlineSuggest)).toBe(ModelTarget.Local);
   });
 
-  it('should build context with stable/volatile splitting', () => {
-    const ctx = service.buildContext(
+  it('should build context with stable/volatile splitting', async () => {
+    const ctx = await service.buildContext(
       '# My Document\n\nThis is the body of the document with some content.',
       20,
     );
