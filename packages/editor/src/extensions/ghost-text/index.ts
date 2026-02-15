@@ -151,19 +151,28 @@ export const GhostText = Extension.create<GhostTextOptions>({
           },
 
           handleKeyDown(view, event) {
-            if (event.key !== 'Tab') return false;
-
             const ps = GhostTextPluginKey.getState(view.state) as GhostTextPluginState;
             if (!ps?.suggestion) return false;
 
-            event.preventDefault();
-            const { text, pos } = ps.suggestion;
+            if (event.key === 'Tab') {
+              event.preventDefault();
+              const { text, pos } = ps.suggestion;
 
-            // Insert the suggestion text and clear ghost text in one transaction
-            const tr = view.state.tr.insertText(text, pos);
-            tr.setMeta(GhostTextPluginKey, null);
-            view.dispatch(tr);
-            return true;
+              // Insert the suggestion text and clear ghost text in one transaction
+              const tr = view.state.tr.insertText(text, pos);
+              tr.setMeta(GhostTextPluginKey, null);
+              view.dispatch(tr);
+              return true;
+            }
+
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              const tr = view.state.tr.setMeta(GhostTextPluginKey, null);
+              view.dispatch(tr);
+              return true;
+            }
+
+            return false;
           },
         },
       }),

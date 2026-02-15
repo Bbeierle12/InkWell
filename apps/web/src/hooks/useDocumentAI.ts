@@ -23,7 +23,10 @@ interface UseDocumentAIOptions {
 export function useDocumentAI({ editor }: UseDocumentAIOptions) {
   const [isReady, setIsReady] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [isLocalMode, setIsLocalMode] = useState(false);
+  const [isLocalMode, setIsLocalMode] = useState(
+    typeof navigator !== 'undefined' ? !navigator.onLine : false,
+  );
+  const [isProcessing, setIsProcessing] = useState(false);
   const sessionRef = useRef<AIOperationSession | null>(null);
 
   useEffect(() => {
@@ -39,29 +42,46 @@ export function useDocumentAI({ editor }: UseDocumentAIOptions) {
     };
   }, []);
 
+  // Track online/offline status
+  useEffect(() => {
+    const goOffline = () => setIsLocalMode(true);
+    const goOnline = () => setIsLocalMode(false);
+    window.addEventListener('offline', goOffline);
+    window.addEventListener('online', goOnline);
+    return () => {
+      window.removeEventListener('offline', goOffline);
+      window.removeEventListener('online', goOnline);
+    };
+  }, []);
+
   const executeOperation = useCallback(
     async (operation: OperationType, args?: string) => {
       if (!editor || !isReady) return;
 
-      const service = getDocumentAI();
-      const { from, to } = editor.state.selection;
-      const docContent = editor.state.doc.textContent;
-      const selectionText = editor.state.doc.textBetween(from, to, '\n');
+      setIsProcessing(true);
+      try {
+        const service = getDocumentAI();
+        const { from, to } = editor.state.selection;
+        const docContent = editor.state.doc.textContent;
+        const selectionText = editor.state.doc.textBetween(from, to, '\n');
 
-      const result = await service.executeOperation({
-        operation,
-        docContent,
-        cursorPos: from,
-        selection: { from, to, text: selectionText },
-        targetTone: args,
-      });
-
-      if (result.instructions.length > 0 && editor) {
-        // Show diff preview
-        const tr = editor.state.tr.setMeta(DiffPreviewPluginKey, {
-          instructions: result.instructions,
+        const result = await service.executeOperation({
+          operation,
+          docContent,
+          cursorPos: from,
+          selection: { from, to, text: selectionText },
+          targetTone: args,
         });
-        editor.view.dispatch(tr);
+
+        if (result.instructions.length > 0 && editor) {
+          // Show diff preview
+          const tr = editor.state.tr.setMeta(DiffPreviewPluginKey, {
+            instructions: result.instructions,
+          });
+          editor.view.dispatch(tr);
+        }
+      } finally {
+        setIsProcessing(false);
       }
     },
     [editor, isReady],
@@ -124,6 +144,7 @@ export function useDocumentAI({ editor }: UseDocumentAIOptions) {
     isReady,
     isPaused,
     isLocalMode,
+    isProcessing,
     executeOperation,
     acceptDiff,
     rejectDiff,

@@ -238,6 +238,62 @@ export async function unloadWhisperModel(): Promise<boolean> {
   }
 }
 
+// ── File Dialog Commands ──
+
+interface FileFilter {
+  name: string;
+  extensions: string[];
+}
+
+/**
+ * Save content to a file using a Tauri invoke command.
+ * Returns the path saved to, or null if cancelled/not in Tauri.
+ */
+export async function saveToFile(
+  content: string,
+  filters: FileFilter[] = [
+    { name: 'Inkwell Document', extensions: ['inkwell'] },
+    { name: 'Markdown', extensions: ['md'] },
+  ],
+): Promise<string | null> {
+  const invoke = await getTauriInvoke();
+  if (!invoke) return null;
+
+  try {
+    const path = await invoke('save_file_dialog', { filters }) as string | null;
+    if (!path) return null;
+
+    await invoke('write_text_file', { path, content });
+    return path;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Open a file using a Tauri invoke command.
+ * Returns the file content as a string, or null if cancelled/not in Tauri.
+ */
+export async function openFromFile(
+  filters: FileFilter[] = [
+    { name: 'Inkwell Document', extensions: ['inkwell'] },
+    { name: 'Markdown', extensions: ['md'] },
+  ],
+): Promise<{ path: string; content: string } | null> {
+  const invoke = await getTauriInvoke();
+  if (!invoke) return null;
+
+  try {
+    const path = await invoke('open_file_dialog', { filters }) as string | null;
+    if (!path) return null;
+
+    const content = await invoke('read_text_file', { path }) as string;
+    return { path, content };
+  } catch {
+    return null;
+  }
+}
+
 // ── System Commands ──
 
 /**

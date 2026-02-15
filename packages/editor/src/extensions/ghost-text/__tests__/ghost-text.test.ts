@@ -309,6 +309,30 @@ describe('1.3 Ghost Text Decorations', () => {
     expect(getGhostTextTTFT()).toHaveLength(0);
   });
 
+  it('should dismiss ghost text on Escape key via explicit null meta', () => {
+    // Ref: Phase 9 — Escape key dismisses ghost text
+    let state = createState();
+
+    // Set ghost text
+    let tr = state.tr.setMeta(GhostTextPluginKey, {
+      text: 'suggestion',
+      pos: 1,
+    } as GhostTextMeta);
+    state = state.apply(tr);
+
+    // Verify it's set
+    let decoSet = GhostTextPluginKey.getState(state) as DecorationSet;
+    expect(decoSet.find()).toHaveLength(1);
+
+    // Simulate what Escape does: dispatch null meta to clear
+    tr = state.tr.setMeta(GhostTextPluginKey, null);
+    state = state.apply(tr);
+
+    // Ghost text should be cleared
+    decoSet = GhostTextPluginKey.getState(state) as DecorationSet;
+    expect(decoSet).toBe(DecorationSet.empty);
+  });
+
   describe('Stability: shouldUpdateGhostText', () => {
     it('should suppress update when levenshtein ratio is below threshold', () => {
       // Ref: Invariant: ghost-text-no-flicker
