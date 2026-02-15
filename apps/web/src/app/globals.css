@@ -255,3 +255,725 @@ body {
     background-color: #052e16;
   }
 }
+
+/* ── Sidebar ── */
+
+.inkwell-sidebar {
+  width: 280px;
+  min-width: 280px;
+  border-right: 1px solid #e5e7eb;
+  background: var(--background);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.inkwell-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.inkwell-sidebar-new-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 1.125rem;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.inkwell-sidebar-new-btn:hover:not(:disabled) {
+  background-color: #f3f4f6;
+}
+
+.inkwell-sidebar-new-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.inkwell-sidebar-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+/* ── Document List ── */
+
+.inkwell-document-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.inkwell-doc-item {
+  padding: 0.625rem 1rem;
+  cursor: pointer;
+  border-bottom: 1px solid #f3f4f6;
+  position: relative;
+  transition: background-color 0.1s;
+}
+
+.inkwell-doc-item:hover {
+  background-color: #f9fafb;
+}
+
+.inkwell-doc-item:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+}
+
+.inkwell-doc-item-active {
+  background-color: #eff6ff;
+  border-left: 3px solid #3b82f6;
+}
+
+.inkwell-doc-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.inkwell-doc-item-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.inkwell-doc-item-menu-btn {
+  opacity: 0;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+  padding: 0 0.25rem;
+  font-size: 0.875rem;
+  border-radius: 0.25rem;
+  transition: opacity 0.15s;
+}
+
+.inkwell-doc-item:hover .inkwell-doc-item-menu-btn {
+  opacity: 0.6;
+}
+
+.inkwell-doc-item-menu-btn:hover {
+  opacity: 1 !important;
+  background-color: #e5e7eb;
+}
+
+.inkwell-doc-item-meta {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.125rem;
+}
+
+.inkwell-doc-item-time {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.inkwell-doc-item-preview {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inkwell-doc-item-context-menu {
+  position: absolute;
+  right: 0.5rem;
+  top: 2rem;
+  background: var(--background);
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 0.25rem;
+  z-index: 20;
+  display: flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.inkwell-doc-item-confirm-text {
+  font-size: 0.75rem;
+  padding: 0 0.25rem;
+  color: #ef4444;
+  font-weight: 500;
+}
+
+.inkwell-doc-item-menu-action {
+  border: none;
+  background: transparent;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  color: var(--foreground);
+}
+
+.inkwell-doc-item-menu-action:hover {
+  background-color: #f3f4f6;
+}
+
+.inkwell-doc-item-menu-danger {
+  color: #ef4444;
+}
+
+.inkwell-doc-item-menu-danger:hover {
+  background-color: #fef2f2;
+}
+
+/* ── Document Title ── */
+
+.inkwell-doc-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: background-color 0.15s;
+}
+
+.inkwell-doc-title:hover {
+  background-color: #f3f4f6;
+}
+
+.inkwell-doc-title-input {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  border: 1px solid #3b82f6;
+  background: var(--background);
+  color: var(--foreground);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  outline: none;
+  max-width: 200px;
+}
+
+/* ── Export / Toast ── */
+
+.inkwell-dropdown-divider {
+  height: 1px;
+  background-color: #e5e7eb;
+  margin: 0.25rem 0;
+}
+
+.inkwell-toast {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f2937;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: inkwell-toast-in 0.2s ease-out;
+}
+
+@keyframes inkwell-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* ── Status Bar ── */
+
+.inkwell-status-bar {
+  display: flex;
+  align-items: center;
+  padding: 0.25rem 1rem;
+  border-top: 1px solid #e5e7eb;
+  font-size: 0.75rem;
+  color: #6b7280;
+  gap: 1rem;
+  min-height: 1.75rem;
+}
+
+.inkwell-status-spacer {
+  flex: 1;
+}
+
+.inkwell-status-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.inkwell-status-unsaved {
+  color: #f59e0b;
+}
+
+.inkwell-status-saved {
+  color: #22c55e;
+}
+
+.inkwell-status-count {
+  color: #9ca3af;
+}
+
+/* ── Dark mode: sidebar + new components ── */
+
+@media (prefers-color-scheme: dark) {
+  .inkwell-sidebar {
+    border-right-color: #374151;
+  }
+
+  .inkwell-sidebar-header {
+    border-bottom-color: #374151;
+  }
+
+  .inkwell-sidebar-new-btn {
+    border-color: #4b5563;
+  }
+
+  .inkwell-sidebar-new-btn:hover:not(:disabled) {
+    background-color: #1f2937;
+  }
+
+  .inkwell-doc-item {
+    border-bottom-color: #1f2937;
+  }
+
+  .inkwell-doc-item:hover {
+    background-color: #111827;
+  }
+
+  .inkwell-doc-item-active {
+    background-color: #1e3a5f;
+  }
+
+  .inkwell-doc-item-menu-btn:hover {
+    background-color: #374151;
+  }
+
+  .inkwell-doc-item-context-menu {
+    border-color: #4b5563;
+  }
+
+  .inkwell-doc-item-menu-action:hover {
+    background-color: #1f2937;
+  }
+
+  .inkwell-doc-item-menu-danger:hover {
+    background-color: #450a0a;
+  }
+
+  .inkwell-doc-title:hover {
+    background-color: #1f2937;
+  }
+
+  .inkwell-doc-title-input {
+    border-color: #3b82f6;
+  }
+
+  .inkwell-dropdown-divider {
+    background-color: #4b5563;
+  }
+
+  .inkwell-status-bar {
+    border-top-color: #374151;
+  }
+}
+
+/* ── Sidebar Controls & Footer ── */
+
+.inkwell-sidebar-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0.25rem 0.75rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.inkwell-sidebar-footer {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* ── Search Bar ── */
+
+.inkwell-search-bar {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #f3f4f6;
+  position: relative;
+}
+
+.inkwell-search-input {
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  padding-right: 1.75rem;
+  font-size: 0.8125rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  background: var(--background);
+  color: var(--foreground);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.inkwell-search-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.inkwell-search-input::placeholder {
+  color: #9ca3af;
+}
+
+.inkwell-search-clear {
+  position: absolute;
+  right: 1rem;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+
+.inkwell-search-clear:hover {
+  color: var(--foreground);
+}
+
+/* ── Tag Filter ── */
+
+.inkwell-tag-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-bottom: 1px solid #f3f4f6;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.inkwell-tag-filter::-webkit-scrollbar {
+  display: none;
+}
+
+.inkwell-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  border: 1px solid #d1d5db;
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.inkwell-tag-chip:hover {
+  background-color: #f3f4f6;
+}
+
+.inkwell-tag-chip-active {
+  background-color: var(--tag-color, #3b82f6);
+  border-color: var(--tag-color, #3b82f6);
+  color: white;
+}
+
+.inkwell-tag-chip-active:hover {
+  opacity: 0.9;
+  background-color: var(--tag-color, #3b82f6);
+}
+
+.inkwell-tag-chip-clear {
+  font-size: 0.6875rem;
+  border: 1px solid #d1d5db;
+  background: transparent;
+  color: #6b7280;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.inkwell-tag-chip-clear:hover {
+  background-color: #f3f4f6;
+}
+
+/* ── Tag Input (inline editor) ── */
+
+.inkwell-tag-input-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.375rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  min-height: 1.75rem;
+  background: var(--background);
+  position: relative;
+}
+
+.inkwell-tag-input-container:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.inkwell-tag-input-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.inkwell-tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.375rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  background-color: var(--tag-color, #3b82f6);
+  color: white;
+  height: 1.25rem;
+}
+
+.inkwell-tag-remove {
+  border: none;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+  font-size: 0.625rem;
+  padding: 0;
+  opacity: 0.7;
+  line-height: 1;
+}
+
+.inkwell-tag-remove:hover {
+  opacity: 1;
+}
+
+.inkwell-tag-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 0.75rem;
+  min-width: 60px;
+  flex: 1;
+}
+
+.inkwell-tag-input::placeholder {
+  color: #9ca3af;
+}
+
+.inkwell-tag-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--background);
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  z-index: 20;
+  margin-top: 0.125rem;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.inkwell-tag-suggestion {
+  display: block;
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 0.75rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inkwell-tag-suggestion:hover {
+  background-color: #f3f4f6;
+}
+
+/* ── Sort Control ── */
+
+.inkwell-sort-control {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.375rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  background: var(--background);
+  color: var(--foreground);
+  cursor: pointer;
+  outline: none;
+}
+
+.inkwell-sort-control:focus {
+  border-color: #3b82f6;
+}
+
+/* ── Trash Toggle ── */
+
+.inkwell-trash-toggle {
+  width: 100%;
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: #6b7280;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.inkwell-trash-toggle:hover {
+  background-color: #f3f4f6;
+  color: var(--foreground);
+}
+
+.inkwell-trash-toggle-active {
+  background-color: #fef2f2;
+  border-color: #fca5a5;
+  color: #ef4444;
+}
+
+.inkwell-trash-toggle-active:hover {
+  background-color: #fee2e2;
+}
+
+/* ── Pin Icon ── */
+
+.inkwell-pin-icon {
+  color: #f59e0b;
+  font-size: 0.75rem;
+}
+
+/* ── Document Item: Tags & Word Count ── */
+
+.inkwell-doc-item-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.inkwell-doc-item-tag {
+  display: inline-block;
+  padding: 0 0.375rem;
+  border-radius: 9999px;
+  font-size: 0.625rem;
+  background-color: var(--tag-color, #3b82f6);
+  color: white;
+  line-height: 1.25rem;
+}
+
+.inkwell-doc-item-wc {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+/* ── Dark mode: Phase 2 components ── */
+
+@media (prefers-color-scheme: dark) {
+  .inkwell-sidebar-controls {
+    border-bottom-color: #1f2937;
+  }
+
+  .inkwell-sidebar-footer {
+    border-top-color: #374151;
+  }
+
+  .inkwell-search-input {
+    border-color: #4b5563;
+  }
+
+  .inkwell-search-input:focus {
+    border-color: #3b82f6;
+  }
+
+  .inkwell-tag-filter {
+    border-bottom-color: #1f2937;
+  }
+
+  .inkwell-tag-chip {
+    border-color: #4b5563;
+  }
+
+  .inkwell-tag-chip:hover {
+    background-color: #1f2937;
+  }
+
+  .inkwell-tag-chip-clear {
+    border-color: #4b5563;
+    color: #9ca3af;
+  }
+
+  .inkwell-tag-chip-clear:hover {
+    background-color: #1f2937;
+  }
+
+  .inkwell-tag-input-container {
+    border-color: #4b5563;
+  }
+
+  .inkwell-tag-suggestions {
+    border-color: #4b5563;
+  }
+
+  .inkwell-tag-suggestion:hover {
+    background-color: #1f2937;
+  }
+
+  .inkwell-sort-control {
+    border-color: #4b5563;
+  }
+
+  .inkwell-trash-toggle {
+    border-color: #4b5563;
+    color: #9ca3af;
+  }
+
+  .inkwell-trash-toggle:hover {
+    background-color: #1f2937;
+    color: var(--foreground);
+  }
+
+  .inkwell-trash-toggle-active {
+    background-color: #450a0a;
+    border-color: #dc2626;
+    color: #fca5a5;
+  }
+
+  .inkwell-trash-toggle-active:hover {
+    background-color: #7f1d1d;
+  }
+}

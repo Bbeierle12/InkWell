@@ -16,13 +16,17 @@ import {
 import type { SlashCommandItem } from '@inkwell/editor';
 
 import { Toolbar } from '@/components/Toolbar';
+import { Sidebar } from '@/components/Sidebar';
 import { BackpressureIndicator } from '@/components/BackpressureIndicator';
 import { EditorArea } from '@/components/EditorArea';
+import { StatusBar } from '@/components/StatusBar';
 import { SetupScreen } from '@/components/SetupScreen';
 import { useDocumentAI } from '@/hooks/useDocumentAI';
 import { useGhostText } from '@/hooks/useGhostText';
 import { useVoicePipeline } from '@/hooks/useVoicePipeline';
 import { useAutoSave } from '@/hooks/useAutoSave';
+import { useDocumentStore } from '@/lib/document-store';
+import { deriveTitleFromContent } from '@/lib/document-utils';
 import { isTauriEnvironment, checkModelsStatus } from '@/lib/tauri-bridge';
 
 const defaultCommands: SlashCommandItem[] = [
@@ -44,6 +48,7 @@ export default function Home() {
   const [hasDiffActive, setHasDiffActive] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
   const [setupChecked, setSetupChecked] = useState(false);
+  const { title, setTitle, toggleSidebar } = useDocumentStore();
 
   // Check if we need to show the setup screen (Tauri only, first run)
   useEffect(() => {
@@ -140,12 +145,43 @@ export default function Home() {
     };
   }, [editor]);
 
+  // Auto-title: derive title from content when still "Untitled"
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleUpdate = () => {
+      if (title !== 'Untitled') return;
+      const content = editor.getJSON() as Record<string, unknown>;
+      const derived = deriveTitleFromContent(content);
+      if (derived) {
+        setTitle(derived);
+      }
+    };
+
+    editor.on('update', handleUpdate);
+    return () => {
+      editor.off('update', handleUpdate);
+    };
+  }, [editor, title, setTitle]);
+
   const handleAIOperation = useCallback(
     (operation: OperationType) => {
       executeOperation(operation);
     },
     [executeOperation],
   );
+
+  // Keyboard shortcut: Ctrl+\ to toggle sidebar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === '\\') {
+        e.preventDefault();
+        toggleSidebar();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleSidebar]);
 
   // Show loading state while checking setup
   if (!setupChecked) {
@@ -176,13 +212,19 @@ export default function Home() {
         lastError={lastError}
         onRetry={retryLastOperation}
       />
-      <div className="flex-1 max-w-4xl mx-auto w-full p-4 md:p-8">
-        <EditorArea
-          editor={editor}
-          hasDiffActive={hasDiffActive}
-          onAcceptDiff={acceptDiff}
-          onRejectDiff={rejectDiff}
-        />
+      <div className="flex flex-1 min-h-0">
+        <Sidebar editor={editor} />
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 max-w-4xl mx-auto w-full p-4 md:p-8">
+            <EditorArea
+              editor={editor}
+              hasDiffActive={hasDiffActive}
+              onAcceptDiff={acceptDiff}
+              onRejectDiff={rejectDiff}
+            />
+          </div>
+          <StatusBar editor={editor} />
+        </div>
       </div>
     </main>
   );

@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-15T03:41:01Z
-version: 2.1
+last_updated: 2026-02-15T05:11:18Z
+version: 2.2
 author: Claude Code PM System
 ---
 
@@ -107,14 +107,15 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │           └── index.ts          # Expanded barrel exports (+ WorkspaceIndexer, simpleEmbed)
 │
 ├── apps/
-│   ├── web/                     # @inkwell/web (97 tests)
+│   ├── web/                     # @inkwell/web (182 tests)
 │   │   └── src/
 │   │       ├── app/             # App Router (layout, page, globals.css)
-│   │       ├── components/      # Editor, Toolbar, DiffPreview, Backpressure, VoiceInput
+│   │       ├── components/      # Editor, Toolbar, DiffPreview, Backpressure, VoiceInput, Sidebar, DocumentList, DocumentListItem, DocumentTitle, ExportMenu, StatusBar, SearchBar, TagFilter, TagInput, SortControl, TrashView
+│   │       │   └── __tests__/   # sidebar-components.test.ts (20), SetupScreen.test.ts (18), BackpressureIndicator.test.ts (8), Toolbar.test.ts (6)
 │   │       ├── hooks/           # useDocumentAI, useGhostText, useVoicePipeline [IMPLEMENTED]
-│   │       │   └── __tests__/   # useVoicePipeline.test.ts (8)
-│   │       └── lib/             # document-ai-instance, tauri-bridge, audio-capture
-│   │           └── __tests__/   # audio-capture.test.ts (5), tauri-bridge-voice.test.ts (2)
+│   │       │   └── __tests__/   # useVoicePipeline.test.ts (8), useDocumentAI-transitions.test.ts (21), useAutoSave.test.ts (4)
+│   │       └── lib/             # document-ai-instance, tauri-bridge, audio-capture, document-store, document-utils
+│   │           └── __tests__/   # document-store-v2.test.ts (33), schema-migration.test.ts (21), filtered-documents.test.ts (11), document-store.test.ts (8), markdown-export.test.ts (8), audio-capture.test.ts (5), tauri-bridge.test.ts (9), tauri-bridge-voice.test.ts (2)
 │   │
 │   └── desktop/                 # @inkwell/desktop (Tauri)
 │       ├── src-tauri/

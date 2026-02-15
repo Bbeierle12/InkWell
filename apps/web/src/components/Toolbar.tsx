@@ -3,14 +3,18 @@
 /**
  * Toolbar Component
  *
- * Editor toolbar with formatting controls, heading selector,
- * list buttons, AI operations dropdown, voice input, and mode indicator.
+ * Editor toolbar with sidebar toggle, document title, formatting controls,
+ * heading selector, list buttons, AI operations dropdown, export menu,
+ * voice input, and mode indicator.
  */
 
 import { useState, useCallback, useEffect } from 'react';
 import type { Editor } from '@tiptap/core';
 import { OperationType } from '@inkwell/shared';
 import { VoiceInput } from './VoiceInput';
+import { DocumentTitle } from './DocumentTitle';
+import { ExportMenu } from './ExportMenu';
+import { useDocumentStore } from '@/lib/document-store';
 import type { UseVoicePipelineReturn } from '../hooks/useVoicePipeline';
 
 interface ToolbarProps {
@@ -23,6 +27,7 @@ interface ToolbarProps {
 export function Toolbar({ editor, onAIOperation, voicePipeline, isLocalMode }: ToolbarProps) {
   const [, setTick] = useState(0);
   const [aiDropdownOpen, setAiDropdownOpen] = useState(false);
+  const { toggleSidebar, sidebarOpen } = useDocumentStore();
 
   // Force re-render on editor transactions so active states update
   useEffect(() => {
@@ -80,7 +85,21 @@ export function Toolbar({ editor, onAIOperation, voicePipeline, isLocalMode }: T
       role="toolbar"
       aria-label="Editor toolbar"
     >
-      <span className="font-semibold text-lg mr-2">Inkwell</span>
+      {/* Sidebar toggle */}
+      <button
+        className="inkwell-toolbar-btn"
+        onClick={toggleSidebar}
+        aria-pressed={sidebarOpen}
+        aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+        title="Toggle sidebar (Ctrl+\\)"
+      >
+        &#9776;
+      </button>
+
+      <div className="inkwell-toolbar-sep" />
+
+      {/* Document title */}
+      <DocumentTitle />
 
       <div className="inkwell-toolbar-sep" />
 
@@ -226,11 +245,18 @@ export function Toolbar({ editor, onAIOperation, voicePipeline, isLocalMode }: T
 
       <div className="inkwell-toolbar-sep" />
 
-      {/* Group 5: Voice input */}
+      {/* Group 5: Export */}
+      <ExportMenu editor={editor} />
+
+      <div className="inkwell-toolbar-sep" />
+
+      {/* Group 6: Voice input */}
       <VoiceInput pipeline={voicePipeline} />
 
-      {/* Group 6: Mode indicator (right-aligned) */}
+      {/* Right-aligned section */}
       <div className="flex-1" />
+
+      {/* Mode indicator */}
       <span
         className="inkwell-mode-chip"
         role="status"

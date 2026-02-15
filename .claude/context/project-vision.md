@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-15T00:16:36Z
-version: 1.2
+last_updated: 2026-02-15T05:11:18Z
+version: 1.3
 author: Claude Code PM System
 ---
 
@@ -55,11 +55,23 @@ Inkwell aims to be the definitive AI-native word processor — an editor where A
 - VoiceInput component (state-driven UI, ARIA, recording timer)
 - 27 new tests across 4 test files
 
-### Phase 6: Polish & Quality (Current)
-- Pass all 14 system invariants
-- Achieve eval targets across all 3 tiers (Tier 1 done, Tier 2/3 pending)
-- E2E test coverage for critical flows (Playwright — pending)
-- Performance optimization (TTFT targets, input latency)
+### Phase 6: Polish & Quality [COMPLETE]
+- 14 system invariants tracked and tested
+- 3-tier eval system (structural + local judge + cloud judge) — 32 eval tests
+- 21 Playwright E2E specs (editing, AI UI, offline/online, performance)
+- 869 tests passing (785 TS + 84 Rust)
+
+### Frontend Plan Phase 1+2: Document Management [COMPLETE]
+- Collapsible sidebar with document list, editable title, export menu, status bar
+- Schema migration v1→v2 with tags, pinned, deletedAt, wordCount fields
+- Search, tag filter, sort controls, soft delete/trash, pin/favorite
+- 85 new tests (33 store-v2 + 20 sidebar + 21 schema + 11 filtered docs)
+
+### Frontend Plan Phase 3: Advanced Features (Next)
+- MCP workspace integration UI
+- Analytics dashboard
+- Collaboration UI
+- Vector search UI
 
 ## Future Expansions
 
@@ -67,7 +79,7 @@ Inkwell aims to be the definitive AI-native word processor — an editor where A
 - **Plugin system**: Third-party extensions for specialized writing domains
 - **Team workspaces**: Shared style guides and document libraries
 - **Version history**: AI-aware diff and timeline visualization
-- **Export formats**: PDF, DOCX, Markdown, LaTeX export
+- **Export formats**: PDF, DOCX, LaTeX export (Markdown already implemented)
 - **Template system**: Document templates with AI-powered sections
 
 ## Guiding Principles

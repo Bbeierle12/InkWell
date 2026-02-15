@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-15T00:16:36Z
-version: 1.2
+last_updated: 2026-02-15T05:11:18Z
+version: 1.3
 author: Claude Code PM System
 ---
 
@@ -26,11 +26,12 @@ Current AI writing tools bolt AI onto existing editors as an afterthought. Inkwe
 ## Success Criteria
 
 1. Typecheck passes across all packages
-2. 675 tests passing (597 TS + 78 Rust) with real assertions
+2. 869 tests passing (785 TS + 84 Rust) with real assertions
 3. 14 system invariants are tracked and tested
-4. 3-tier eval system validates AI output quality (Tier 1 implemented)
+4. 3-tier eval system validates AI output quality (all tiers implemented)
 5. Web and desktop (Tauri) apps share the same editor core
 6. Privacy canary prevents private document leakage
+7. Document management UI: sidebar, search, tags, pin, sort, trash
 
 ## Target Platforms
 
@@ -39,4 +40,4 @@ Current AI writing tools bolt AI onto existing editors as an afterthought. Inkwe
 
 ## Current Phase
 
-Implementation Phases 1-5 + Phase 7 (Voice Pipeline) complete. All core packages have real implementations and passing tests. Voice pipeline fully implemented with audio capture, local transcription, Claude refinement, and editor insertion. Ready for E2E testing, performance benchmarks, and Tier 2/3 eval implementation.
+All implementation phases (1-11) complete plus Frontend Plan Phase 1+2. Core packages fully implemented with 869 passing tests. Frontend now has document management sidebar with search, tags, pin, sort, and soft delete/trash. Next: Frontend Plan Phase 3 (MCP integration, analytics, collaboration UI).

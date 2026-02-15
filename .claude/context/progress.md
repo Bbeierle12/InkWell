@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-15T03:41:01Z
-version: 2.6
+last_updated: 2026-02-15T05:11:18Z
+version: 2.7
 author: Claude Code PM System
 ---
 
@@ -439,6 +439,64 @@ Phases 1-10 complete. Phase 11 fills all test gaps: 21 Playwright E2E specs (edi
 **Evals Config**
 - `vitest.config.ts`: globals enabled, 15s test timeout
 
+### Frontend Plan — Phase 1: Surface Existing Backend (2026-02-15)
+
+**Document Switcher / Sidebar**
+- `Sidebar.tsx`: Collapsible sidebar shell with search, tag filter, sort control, document list, trash toggle
+- `DocumentList.tsx`: Renders list of saved documents with title, relative time, preview
+- `DocumentListItem.tsx`: Individual item with context menu (pin/delete), tag display, word count, confirm dialog
+- `DocumentTitle.tsx`: Click-to-edit inline title in toolbar (Enter commits, Escape cancels)
+- `ExportMenu.tsx`: Dropdown with Copy/Download Markdown, Tauri-only Save/Open file dialogs, toast notifications
+- `StatusBar.tsx`: Save status (Unsaved/Saved), live word count, character count (subscribes to editor update events)
+
+**Store Enhancements**
+- `document-store.ts`: Added documents array, sidebarOpen, setTitle, toggleSidebar, setSidebarOpen, refreshDocuments
+- `document-utils.ts`: New utility module — extractPreview, formatRelativeTime, countWords, countWordsFromContent, deriveTitleFromContent, tagColor
+
+**Layout & Integration**
+- `page.tsx`: Sidebar layout (flex row), auto-title from content, Ctrl+\ sidebar toggle, StatusBar below editor
+- `Toolbar.tsx`: Sidebar toggle (hamburger), DocumentTitle, ExportMenu integration
+- `globals.css`: Extensive CSS for sidebar, document list, title, export, status bar, dark mode
+
+**Tests (53 new)**
+- `document-store-v2.test.ts` (33 tests): extractPreview, formatRelativeTime, countWords, deriveTitleFromContent, store state
+- `sidebar-components.test.ts` (20 tests): sorting, filtering, title logic, export, status bar, sidebar toggle
+
+### Frontend Plan — Phase 2: Organization Layer (2026-02-15)
+
+**Schema Migration v1→v2**
+- `StoredDocument` extended: tags (string[]), pinned (boolean), deletedAt (number|null), wordCount (number)
+- `DB_VERSION` bumped to 2 with `onupgradeneeded` handling
+- `ensureV2Fields()` backfills v1 documents at read time for backward compatibility
+- `SortMode` type: 'updated' | 'created' | 'title-az' | 'title-za'
+
+**New Store Actions**
+- softDelete, restore, permanentDelete (trash lifecycle)
+- setTags, togglePin, getAllTags (organization)
+- setSortMode, setSearchQuery, setActiveTagFilters, setShowTrash (filtering)
+- `getFilteredDocuments()` pure selector: trash/search/tag AND filter + sort with pin-first priority
+- `sortDocuments()` with pinned-first logic across all sort modes
+
+**New Components**
+- `SearchBar.tsx`: Debounced (200ms) search input updating store
+- `TagFilter.tsx`: Horizontal chip bar for tag filtering with "All" clear button
+- `TagInput.tsx`: Inline tag editor with autocomplete from existing tags
+- `SortControl.tsx`: Dropdown for sort mode selection
+- `TrashView.tsx`: Trash toggle button (TrashToggle export)
+
+**Updated Components**
+- `Sidebar.tsx`: Integrates SearchBar, TagFilter, SortControl, TrashToggle, uses getFilteredDocuments selector
+- `DocumentList.tsx`: Added onRestore, isTrashView props
+- `DocumentListItem.tsx`: Pin indicator (star), tag display (colored), trash actions (restore/delete forever), pin toggle in context menu, word count display
+
+**CSS (Phase 2 additions)**
+- Search bar, tag filter/chips/badges, tag input/suggestions, sort control, trash toggle, pin icon, doc-item-tags, doc-item-wc
+- Full dark mode variants for all Phase 2 components
+
+**Tests (32 new)**
+- `schema-migration.test.ts` (21 tests): v1→v2 migration, soft delete/trash, tags CRUD+filter, pin/sort, sort controls, tagColor
+- `filtered-documents.test.ts` (11 tests): getFilteredDocuments selector — trash, search, tags AND filter, pins, combined filters
+
 ## Verification Results
 
 | Check | Result |
@@ -446,11 +504,11 @@ Phases 1-10 complete. Phase 11 fills all test gaps: 21 Playwright E2E specs (edi
 | `@inkwell/shared` tests | 15 passed (2 test files) |
 | `@inkwell/editor` tests | 190 passed (10 test files) |
 | `@inkwell/document-ai` tests | 303 passed (16 test files) |
-| `@inkwell/web` tests | 97 passed (11 test files) |
+| `@inkwell/web` tests | 182 passed (15 test files) |
 | `@inkwell/mcp-workspace` tests | 63 passed (10 test files) |
 | `@inkwell/evals` tests | 32 passed (4 test files) |
 | `inkwell-desktop` Rust tests | 84 passed (0 warnings) |
-| **Total tests** | **784 passed, 0 failed** (700 TS + 84 Rust) |
+| **Total tests** | **869 passed, 0 failed** (785 TS + 84 Rust) |
 | E2E specs (Playwright) | 21 specs written (editing 8, AI 5, offline 4, perf 4) |
 | Web build (`next build`) | Static export successful |
 | Turbo pipeline | 12/12 tasks passed |
@@ -461,16 +519,16 @@ Phases 1-10 complete. Phase 11 fills all test gaps: 21 Playwright E2E specs (edi
 ## Git Status
 
 - Git repository initialized, 8 commits on `main` branch
-- Working tree clean — all phases committed
+- Frontend Plan Phase 1+2 work uncommitted (6 modified + 16 new files)
 
 ## Immediate Next Steps
 
-1. **Tauri production build** — Test full `tauri build` pipeline on target platforms
-2. **Model download URLs** — Populate MODEL_CATALOG URLs for actual model hosting (HuggingFace or self-hosted)
-3. **Fix whisper-rs Windows build** — `whisper-rs-sys` bundled bindings are Linux-specific; needs MSVC include paths for fresh bindgen
-4. **TypeScript typecheck cleanup** — Fix editor/document-ai vitest globals in tsconfig
-5. **Run E2E tests against dev server** — `cd e2e && npx playwright test --project=chromium`
-6. **CI pipeline configuration** — Wire up Playwright + eval tiers to GitHub Actions workflows
+1. **Commit Frontend Plan Phase 1+2 work** — 16 new files + 6 modified files ready to commit
+2. **Frontend Plan Phase 3** — MCP integration, analytics dashboard, collaboration UI, vector search UI
+3. **Tauri production build** — Test full `tauri build` pipeline on target platforms
+4. **Model download URLs** — Populate MODEL_CATALOG URLs for actual model hosting (HuggingFace or self-hosted)
+5. **Fix whisper-rs Windows build** — `whisper-rs-sys` bundled bindings are Linux-specific; needs MSVC include paths for fresh bindgen
+6. **Run E2E tests against dev server** — `cd e2e && npx playwright test --project=chromium`
 
 ## Known Issues
 
@@ -498,3 +556,4 @@ Phases 1-10 complete. Phase 11 fills all test gaps: 21 Playwright E2E specs (edi
 - 2026-02-15T02:00:00Z: Phase 9 Web UI Polish — Toolbar (formatting, headings, lists, AI dropdown, voice, mode indicator), BackpressureIndicator, EditorArea refactor, page.tsx restructure (lifted useEditor), document-store (Zustand + IndexedDB), useAutoSave, ghost text Escape handler, CSS additions. ~730 tests pass.
 - 2026-02-15T03:06:22Z: Phase 10 Desktop Packaging & Offline Mode — Rust bridge commands (rfd file dialogs, dirs model paths, reqwest streaming downloads), SetupScreen component (model catalog, download progress), offline/online transitions (AbortController cancellation, retry), 39 new tests. 770 tests pass (686 TS + 84 Rust).
 - 2026-02-15T03:41:01Z: Phase 11 E2E Testing, Evals & Performance — 21 Playwright E2E specs (editing, AI UI, offline/online, performance), Tier 2 deterministic local judge (heuristic scoring), Tier 3 cloud judge (Claude API + MSW-mocked tests), vitest config, Chromium-only playwright config. 784 tests pass (700 TS + 84 Rust). 32 eval tests (12 compare + 6 T1 + 8 T2 + 6 T3).
+- 2026-02-15T05:11:18Z: Frontend Plan Phase 1+2 — Document switcher sidebar, editable title, export menu, status bar, schema migration v1→v2 (tags/pinned/deletedAt/wordCount), search, tag filter, sort controls, soft delete/trash, pin. 16 new files + 6 modified. 869 tests pass (785 TS + 84 Rust). Web tests: 97 → 182 (85 new across 4 test files).

@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-15T00:16:36Z
-version: 1.2
+last_updated: 2026-02-15T05:11:18Z
+version: 1.3
 author: Claude Code PM System
 ---
 
@@ -75,6 +75,25 @@ author: Claude Code PM System
 | Expand | Claude Sonnet | 16,000 | Elaboration |
 | Critique | Claude Opus | 32,000 | Deep analysis |
 | Voice Refine | Claude Sonnet | 16,000 | Transcription cleanup |
+
+### 7. Document Management [IMPLEMENTED]
+- Collapsible sidebar with document list (title, relative time, preview, word count)
+- Click-to-edit inline title in toolbar (auto-derives from content headings/paragraphs)
+- Tags system with colored chips, inline editor with autocomplete
+- Pin/favorite documents (pinned always sort to top)
+- Search across document titles and content previews
+- Sort controls: Last Modified, Created, Title A-Z, Title Z-A
+- Soft delete with trash view (restore or permanent delete)
+- IndexedDB schema migration v1→v2 with read-time backfill
+
+### 8. Export [IMPLEMENTED]
+- Copy as Markdown (clipboard)
+- Download as Markdown (.md file)
+- Tauri-only: Save to File dialog, Open File dialog (native rfd dialogs)
+
+### 9. Status Bar [IMPLEMENTED]
+- Save status indicator (Unsaved/Saved with color)
+- Live word count and character count (subscribes to editor updates)
 
 ## Privacy Model
 

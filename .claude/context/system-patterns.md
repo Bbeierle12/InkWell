@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-15T01:20:41Z
-version: 2.1
+last_updated: 2026-02-15T05:11:18Z
+version: 2.2
 author: Claude Code PM System
 ---
 
@@ -219,6 +219,35 @@ ProseMirror plugin for "/" command palette:
 - `Decoration.widget` renders floating command palette
 - `onExecute(command, args, selection)` callback for integration
 - 4 tests using real TipTap Editor with meta-based state transitions
+
+### 19. Document Store with Schema Migration [IMPLEMENTED + TESTED]
+Zustand store with IndexedDB backend supports versioned schema migration:
+- `DB_VERSION` tracks schema version; `openDB()` handles `onupgradeneeded` for version transitions
+- `ensureV2Fields()` backfills v1 documents at read time (tags, pinned, deletedAt, wordCount) — avoids batch migration in upgrade handler
+- `StoredDocument` v2: added `tags: string[]`, `pinned: boolean`, `deletedAt: number | null`, `wordCount: number`
+- Soft delete pattern: `deletedAt` timestamp (null = active, non-null = trashed), with `softDelete()`, `restore()`, `permanentDelete()` lifecycle
+- `save()` auto-computes wordCount and preserves existing tags/pinned/deletedAt fields
+
+### 20. Filtered Documents Selector [IMPLEMENTED + TESTED]
+Pure selector function computes displayed documents from store state:
+- `getFilteredDocuments(state)` — exported as standalone function, not a store action
+- Pipeline: trash filter → search filter (title + preview text) → tag AND filter → sort with pin-first priority
+- `sortDocuments(docs, mode)` sorts by updated/created/title with pinned documents always at top
+- `SortMode` type: `'updated' | 'created' | 'title-az' | 'title-za'`
+- Search is case-insensitive against both title and extracted preview content
+- Tag filtering uses AND semantics (document must have ALL active tags)
+- 11 tests covering trash, search, tags, pins, and combined filter scenarios
+
+### 21. Sidebar Component Architecture [IMPLEMENTED + TESTED]
+Collapsible sidebar with composed sub-components:
+- `Sidebar` shell: orchestrates SearchBar, TagFilter, SortControl, DocumentList, TrashToggle
+- `DocumentList` renders items with refresh-on-mount via `onRefresh()` useEffect
+- `DocumentListItem` has context menu with confirm dialog for destructive actions
+- `SearchBar` uses debounced input (200ms) writing to store
+- `TagFilter` renders horizontal chip bar from `getAllTags()` with toggle semantics
+- `TagInput` provides inline tag editing with autocomplete from existing tags
+- `tagColor(tag)` assigns stable colors via deterministic string hash into palette
+- CSS follows `.inkwell-*` convention with full dark mode variants
 
 ## Data Flow
 
