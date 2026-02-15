@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-15T05:11:18Z
-version: 1.3
+last_updated: 2026-02-15T06:42:47Z
+version: 1.4
 author: Claude Code PM System
 ---
 
@@ -85,6 +85,9 @@ author: Claude Code PM System
 - Sort controls: Last Modified, Created, Title A-Z, Title Z-A
 - Soft delete with trash view (restore or permanent delete)
 - IndexedDB schema migration v1→v2 with read-time backfill
+- New document creation immediately persists to IndexedDB (appears in sidebar instantly)
+- Document switching auto-saves current dirty document before loading new one
+- Dark-themed sidebar with visible section borders and hover highlights
 
 ### 8. Export [IMPLEMENTED]
 - Copy as Markdown (clipboard)

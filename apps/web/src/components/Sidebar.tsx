@@ -27,21 +27,33 @@ export function Sidebar({ editor }: SidebarProps) {
 
   if (!sidebarOpen) return null;
 
-  const handleNewDocument = () => {
+  const handleNewDocument = async () => {
     if (!editor) return;
-    newDocument(editor);
+    await newDocument(editor);
   };
 
   const handleLoadDocument = async (id: string) => {
     if (!editor) return;
+    // Don't reload the document we're already viewing
+    if (id === documentId) return;
+    // Save current document before switching if it has unsaved changes
+    if (documentId && store.isDirty) {
+      await store.save(editor);
+    }
     await load(id, editor);
   };
 
   const handleDeleteDocument = async (id: string) => {
+    const wasActiveDoc = id === documentId;
     if (showTrash) {
       await permanentDelete(id);
     } else {
       await softDelete(id);
+    }
+    // Clear editor content when deleting the active document
+    // to prevent auto-save from recreating it
+    if (wasActiveDoc && editor) {
+      editor.commands.clearContent();
     }
   };
 

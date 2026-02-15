@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-15T05:11:18Z
-version: 2.7
+last_updated: 2026-02-15T06:42:47Z
+version: 2.8
 author: Claude Code PM System
 ---
 
@@ -519,7 +519,7 @@ Phases 1-10 complete. Phase 11 fills all test gaps: 21 Playwright E2E specs (edi
 ## Git Status
 
 - Git repository initialized, 8 commits on `main` branch
-- Frontend Plan Phase 1+2 work uncommitted (6 modified + 16 new files)
+- Frontend Plan Phase 1+2 work + sidebar polish uncommitted (6 modified + 16 new files)
 
 ## Immediate Next Steps
 
@@ -557,3 +557,4 @@ Phases 1-10 complete. Phase 11 fills all test gaps: 21 Playwright E2E specs (edi
 - 2026-02-15T03:06:22Z: Phase 10 Desktop Packaging & Offline Mode — Rust bridge commands (rfd file dialogs, dirs model paths, reqwest streaming downloads), SetupScreen component (model catalog, download progress), offline/online transitions (AbortController cancellation, retry), 39 new tests. 770 tests pass (686 TS + 84 Rust).
 - 2026-02-15T03:41:01Z: Phase 11 E2E Testing, Evals & Performance — 21 Playwright E2E specs (editing, AI UI, offline/online, performance), Tier 2 deterministic local judge (heuristic scoring), Tier 3 cloud judge (Claude API + MSW-mocked tests), vitest config, Chromium-only playwright config. 784 tests pass (700 TS + 84 Rust). 32 eval tests (12 compare + 6 T1 + 8 T2 + 6 T3).
 - 2026-02-15T05:11:18Z: Frontend Plan Phase 1+2 — Document switcher sidebar, editable title, export menu, status bar, schema migration v1→v2 (tags/pinned/deletedAt/wordCount), search, tag filter, sort controls, soft delete/trash, pin. 16 new files + 6 modified. 869 tests pass (785 TS + 84 Rust). Web tests: 97 → 182 (85 new across 4 test files).
+- 2026-02-15T06:42:47Z: Sidebar polish & document store bug fixes — Dark theme sidebar (black background, visible borders, hover highlights), React 19 useRef fix in SearchBar. Fixed 3 document store bugs: newDocument now async with immediate IDB persistence (appears in sidebar instantly), softDelete clears editor content (prevents auto-save recreating deleted doc), clicking active doc skips reload (preserves unsaved edits), switching docs saves current first. All 182 web tests pass.

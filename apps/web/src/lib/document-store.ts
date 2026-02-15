@@ -63,7 +63,7 @@ interface DocumentStoreState {
   softDelete: (id: string) => Promise<void>;
   restore: (id: string) => Promise<void>;
   permanentDelete: (id: string) => Promise<void>;
-  newDocument: (editor: Editor) => void;
+  newDocument: (editor: Editor) => Promise<void>;
   setTags: (id: string, tags: string[]) => Promise<void>;
   togglePin: (id: string) => Promise<void>;
   getAllTags: () => string[];
@@ -322,14 +322,51 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
     set({ documents });
   },
 
-  newDocument: (editor: Editor) => {
+  newDocument: async (editor: Editor) => {
+    const state = get();
+
+    // Save current document if dirty
+    if (state.documentId && state.isDirty) {
+      const content = editor.getJSON() as Record<string, unknown>;
+      const existing = await getDocument(state.documentId);
+      if (existing) {
+        await putDocument({
+          ...existing,
+          content,
+          title: state.title,
+          updatedAt: Date.now(),
+          wordCount: countWordsFromContent(content),
+        });
+      }
+    }
+
+    // Clear editor and create new document
     editor.commands.clearContent();
+    const newId = generateId();
+    const now = Date.now();
+
+    const newDoc: StoredDocument = {
+      id: newId,
+      title: 'Untitled',
+      content: editor.getJSON() as Record<string, unknown>,
+      createdAt: now,
+      updatedAt: now,
+      tags: [],
+      pinned: false,
+      deletedAt: null,
+      wordCount: 0,
+    };
+
+    await putDocument(newDoc);
     set({
-      documentId: null,
+      documentId: newId,
       title: 'Untitled',
       isDirty: false,
-      lastSavedAt: null,
+      lastSavedAt: now,
     });
+
+    const documents = await getAllDocuments();
+    set({ documents });
   },
 
   setTags: async (id: string, tags: string[]) => {

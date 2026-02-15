@@ -13,7 +13,7 @@ import { useDocumentStore } from '@/lib/document-store';
 export function SearchBar() {
   const { setSearchQuery } = useDocumentStore();
   const [localValue, setLocalValue] = useState('');
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
