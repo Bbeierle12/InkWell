@@ -428,6 +428,254 @@ pub async fn transcribe_audio_bytes(
     })
 }
 
+// ─────────────────────── File Dialog Commands ─────────────────────────
+
+/// Filter specification for file dialogs.
+#[derive(Debug, Clone, Deserialize)]
+pub struct FileFilter {
+    pub name: String,
+    pub extensions: Vec<String>,
+}
+
+/// Show a native save file dialog and return the selected path.
+#[tauri::command]
+pub async fn save_file_dialog(filters: Vec<FileFilter>) -> Result<Option<String>, String> {
+    let mut dialog = rfd::AsyncFileDialog::new();
+
+    for f in &filters {
+        let ext_refs: Vec<&str> = f.extensions.iter().map(|s| s.as_str()).collect();
+        dialog = dialog.add_filter(&f.name, &ext_refs);
+    }
+
+    match dialog.save_file().await {
+        Some(handle) => Ok(Some(handle.path().to_string_lossy().to_string())),
+        None => Ok(None),
+    }
+}
+
+/// Show a native open file dialog and return the selected path.
+#[tauri::command]
+pub async fn open_file_dialog(filters: Vec<FileFilter>) -> Result<Option<String>, String> {
+    let mut dialog = rfd::AsyncFileDialog::new();
+
+    for f in &filters {
+        let ext_refs: Vec<&str> = f.extensions.iter().map(|s| s.as_str()).collect();
+        dialog = dialog.add_filter(&f.name, &ext_refs);
+    }
+
+    match dialog.pick_file().await {
+        Some(handle) => Ok(Some(handle.path().to_string_lossy().to_string())),
+        None => Ok(None),
+    }
+}
+
+/// Write text content to a file at the given path.
+#[tauri::command]
+pub async fn write_text_file(path: String, content: String) -> Result<(), String> {
+    tokio::fs::write(&path, content.as_bytes())
+        .await
+        .map_err(|e| format!("Failed to write file: {}", e))
+}
+
+/// Read text content from a file at the given path.
+#[tauri::command]
+pub async fn read_text_file(path: String) -> Result<String, String> {
+    let bytes = tokio::fs::read(&path)
+        .await
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    // Try UTF-8 first, fall back to encoding detection
+    match String::from_utf8(bytes.clone()) {
+        Ok(s) => Ok(s),
+        Err(_) => {
+            let (cow, _, _) = encoding_rs::UTF_8.decode(&bytes);
+            Ok(cow.into_owned())
+        }
+    }
+}
+
+// ─────────────────────── Model Management Commands ────────────────────
+
+/// Information about a model file in the models directory.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ModelInfo {
+    pub name: String,
+    pub filename: String,
+    pub size_bytes: u64,
+    pub model_type: String, // "llm" or "whisper"
+}
+
+/// Status of models on disk.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ModelsStatus {
+    pub models_dir: String,
+    pub llm_models: Vec<ModelInfo>,
+    pub whisper_models: Vec<ModelInfo>,
+    pub has_llm: bool,
+    pub has_whisper: bool,
+}
+
+/// Progress event emitted during model download.
+#[derive(Debug, Clone, Serialize)]
+pub struct DownloadProgressEvent {
+    pub model_name: String,
+    pub bytes_downloaded: u64,
+    pub total_bytes: Option<u64>,
+    pub progress_pct: Option<f64>,
+    pub done: bool,
+    pub error: Option<String>,
+}
+
+/// Get the platform-specific models directory path.
+///
+/// - Linux: ~/.local/share/inkwell/models
+/// - macOS: ~/Library/Application Support/inkwell/models
+/// - Windows: %APPDATA%/inkwell/models
+#[tauri::command]
+pub async fn get_models_dir() -> Result<String, String> {
+    let base = dirs::data_dir().ok_or("Could not determine data directory")?;
+    let models_dir = base.join("inkwell").join("models");
+
+    // Ensure directory exists
+    tokio::fs::create_dir_all(&models_dir)
+        .await
+        .map_err(|e| format!("Failed to create models directory: {}", e))?;
+
+    Ok(models_dir.to_string_lossy().to_string())
+}
+
+/// Check which models are installed in the models directory.
+#[tauri::command]
+pub async fn check_models_status() -> Result<ModelsStatus, String> {
+    let base = dirs::data_dir().ok_or("Could not determine data directory")?;
+    let models_dir = base.join("inkwell").join("models");
+
+    // Create dir if it doesn't exist
+    tokio::fs::create_dir_all(&models_dir)
+        .await
+        .map_err(|e| format!("Failed to create models directory: {}", e))?;
+
+    let mut llm_models = Vec::new();
+    let mut whisper_models = Vec::new();
+
+    // Scan directory for model files
+    if let Ok(mut entries) = tokio::fs::read_dir(&models_dir).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            let path = entry.path();
+            let filename = path.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+
+            if let Ok(metadata) = entry.metadata().await {
+                let size_bytes = metadata.len();
+                let name = path.file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+
+                if filename.ends_with(".gguf") {
+                    llm_models.push(ModelInfo {
+                        name,
+                        filename,
+                        size_bytes,
+                        model_type: "llm".to_string(),
+                    });
+                } else if filename.ends_with(".bin") && filename.contains("whisper") {
+                    whisper_models.push(ModelInfo {
+                        name,
+                        filename,
+                        size_bytes,
+                        model_type: "whisper".to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    let has_llm = !llm_models.is_empty();
+    let has_whisper = !whisper_models.is_empty();
+
+    Ok(ModelsStatus {
+        models_dir: models_dir.to_string_lossy().to_string(),
+        llm_models,
+        whisper_models,
+        has_llm,
+        has_whisper,
+    })
+}
+
+/// Download a model from a URL to the models directory with progress events.
+#[tauri::command]
+pub async fn download_model(
+    app: tauri::AppHandle,
+    url: String,
+    filename: String,
+) -> Result<String, String> {
+    use futures_util::StreamExt;
+
+    let base = dirs::data_dir().ok_or("Could not determine data directory")?;
+    let models_dir = base.join("inkwell").join("models");
+    tokio::fs::create_dir_all(&models_dir)
+        .await
+        .map_err(|e| format!("Failed to create models directory: {}", e))?;
+
+    let dest = models_dir.join(&filename);
+    let model_name = filename.clone();
+
+    let client = reqwest::Client::new();
+    let response = client.get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Download request failed: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Download failed with status: {}", response.status()));
+    }
+
+    let total_bytes = response.content_length();
+    let mut stream = response.bytes_stream();
+    let mut file = tokio::fs::File::create(&dest)
+        .await
+        .map_err(|e| format!("Failed to create file: {}", e))?;
+
+    let mut downloaded: u64 = 0;
+
+    while let Some(chunk_result) = stream.next().await {
+        let chunk = chunk_result.map_err(|e| format!("Download stream error: {}", e))?;
+
+        use tokio::io::AsyncWriteExt;
+        file.write_all(&chunk)
+            .await
+            .map_err(|e| format!("Failed to write chunk: {}", e))?;
+
+        downloaded += chunk.len() as u64;
+
+        let progress_pct = total_bytes.map(|total| (downloaded as f64 / total as f64) * 100.0);
+
+        let _ = app.emit("download-progress", DownloadProgressEvent {
+            model_name: model_name.clone(),
+            bytes_downloaded: downloaded,
+            total_bytes,
+            progress_pct,
+            done: false,
+            error: None,
+        });
+    }
+
+    // Emit completion event
+    let _ = app.emit("download-progress", DownloadProgressEvent {
+        model_name: model_name.clone(),
+        bytes_downloaded: downloaded,
+        total_bytes,
+        progress_pct: Some(100.0),
+        done: true,
+        error: None,
+    });
+
+    Ok(dest.to_string_lossy().to_string())
+}
+
 /// Simple GPU detection heuristic.
 fn detect_gpu() -> bool {
     // On Windows, check for common GPU indicators
@@ -850,5 +1098,102 @@ mod tests {
         };
         let err = validate_transcribe_audio_bytes_request(&req).unwrap_err();
         assert_eq!(err.code, "INVALID_LANGUAGE");
+    }
+
+    // ── §10.1: FileFilter deserialization ──
+
+    #[test]
+    fn test_file_filter_deserialization() {
+        let json = r#"{"name": "Inkwell Document", "extensions": ["inkwell"]}"#;
+        let f: FileFilter = serde_json::from_str(json).unwrap();
+        assert_eq!(f.name, "Inkwell Document");
+        assert_eq!(f.extensions, vec!["inkwell"]);
+    }
+
+    #[test]
+    fn test_file_filter_multiple_extensions() {
+        let json = r#"{"name": "Images", "extensions": ["png", "jpg", "gif"]}"#;
+        let f: FileFilter = serde_json::from_str(json).unwrap();
+        assert_eq!(f.extensions.len(), 3);
+    }
+
+    // ── §10.2: ModelInfo serialization ──
+
+    #[test]
+    fn test_model_info_serialization() {
+        let info = ModelInfo {
+            name: "llama-3-8b".into(),
+            filename: "llama-3-8b-q4.gguf".into(),
+            size_bytes: 4_500_000_000,
+            model_type: "llm".into(),
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        assert!(json.contains("\"name\":\"llama-3-8b\""));
+        assert!(json.contains("\"model_type\":\"llm\""));
+
+        let decoded: ModelInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, info);
+    }
+
+    #[test]
+    fn test_models_status_serialization() {
+        let status = ModelsStatus {
+            models_dir: "/home/user/.local/share/inkwell/models".into(),
+            llm_models: vec![ModelInfo {
+                name: "test-llm".into(),
+                filename: "test.gguf".into(),
+                size_bytes: 100,
+                model_type: "llm".into(),
+            }],
+            whisper_models: vec![],
+            has_llm: true,
+            has_whisper: false,
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("\"has_llm\":true"));
+        assert!(json.contains("\"has_whisper\":false"));
+
+        let decoded: ModelsStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, status);
+    }
+
+    #[test]
+    fn test_download_progress_event_serialization() {
+        let event = DownloadProgressEvent {
+            model_name: "llama-3-8b".into(),
+            bytes_downloaded: 1_000_000,
+            total_bytes: Some(4_000_000),
+            progress_pct: Some(25.0),
+            done: false,
+            error: None,
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"progress_pct\":25.0"));
+        assert!(json.contains("\"done\":false"));
+
+        let done_event = DownloadProgressEvent {
+            model_name: "llama-3-8b".into(),
+            bytes_downloaded: 4_000_000,
+            total_bytes: Some(4_000_000),
+            progress_pct: Some(100.0),
+            done: true,
+            error: None,
+        };
+        let json = serde_json::to_string(&done_event).unwrap();
+        assert!(json.contains("\"done\":true"));
+    }
+
+    #[test]
+    fn test_download_progress_event_with_error() {
+        let event = DownloadProgressEvent {
+            model_name: "llama-3-8b".into(),
+            bytes_downloaded: 500,
+            total_bytes: Some(1000),
+            progress_pct: Some(50.0),
+            done: true,
+            error: Some("Network error".into()),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"error\":\"Network error\""));
     }
 }

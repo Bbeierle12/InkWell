@@ -5,6 +5,7 @@
  *
  * Binds the DocumentAI service to the TipTap editor instance.
  * Provides operation execution, diff accept/reject, and cleanup.
+ * Handles offline/online transitions with abort + retry.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/core';
@@ -19,6 +20,9 @@ interface UseDocumentAIOptions {
 
 /**
  * React hook that connects the DocumentAI runtime to an editor instance.
+ *
+ * Tracks online/offline state and aborts in-flight operations
+ * when connectivity is lost mid-stream.
  */
 export function useDocumentAI({ editor }: UseDocumentAIOptions) {
   const [isReady, setIsReady] = useState(false);
@@ -27,7 +31,11 @@ export function useDocumentAI({ editor }: UseDocumentAIOptions) {
     typeof navigator !== 'undefined' ? !navigator.onLine : false,
   );
   const [isProcessing, setIsProcessing] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
   const sessionRef = useRef<AIOperationSession | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  // Track the last failed operation for retry
+  const lastOpRef = useRef<{ operation: OperationType; args?: string } | null>(null);
 
   useEffect(() => {
     try {
@@ -42,10 +50,20 @@ export function useDocumentAI({ editor }: UseDocumentAIOptions) {
     };
   }, []);
 
-  // Track online/offline status
+  // Track online/offline status and abort in-flight requests on disconnect
   useEffect(() => {
-    const goOffline = () => setIsLocalMode(true);
-    const goOnline = () => setIsLocalMode(false);
+    const goOffline = () => {
+      setIsLocalMode(true);
+      // Abort any in-flight operation when going offline
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
+      }
+    };
+    const goOnline = () => {
+      setIsLocalMode(false);
+      setLastError(null);
+    };
     window.addEventListener('offline', goOffline);
     window.addEventListener('online', goOnline);
     return () => {
@@ -58,7 +76,15 @@ export function useDocumentAI({ editor }: UseDocumentAIOptions) {
     async (operation: OperationType, args?: string) => {
       if (!editor || !isReady) return;
 
+      // Abort any previous in-flight request
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       setIsProcessing(true);
+      setLastError(null);
+      lastOpRef.current = { operation, args };
+
       try {
         const service = getDocumentAI();
         const { from, to } = editor.state.selection;
@@ -73,6 +99,11 @@ export function useDocumentAI({ editor }: UseDocumentAIOptions) {
           targetTone: args,
         });
 
+        // Check if aborted while awaiting
+        if (controller.signal.aborted) {
+          return;
+        }
+
         if (result.instructions.length > 0 && editor) {
           // Show diff preview
           const tr = editor.state.tr.setMeta(DiffPreviewPluginKey, {
@@ -80,12 +111,35 @@ export function useDocumentAI({ editor }: UseDocumentAIOptions) {
           });
           editor.view.dispatch(tr);
         }
+
+        // Successful — clear retry ref
+        lastOpRef.current = null;
+      } catch (err) {
+        if (controller.signal.aborted) {
+          setLastError('Operation interrupted — connection lost.');
+        } else {
+          setLastError(
+            err instanceof Error ? err.message : 'AI operation failed.',
+          );
+        }
       } finally {
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+        }
         setIsProcessing(false);
       }
     },
     [editor, isReady],
   );
+
+  /**
+   * Retry the last failed operation (e.g., after reconnecting).
+   */
+  const retryLastOperation = useCallback(() => {
+    if (!lastOpRef.current) return;
+    const { operation, args } = lastOpRef.current;
+    executeOperation(operation, args);
+  }, [executeOperation]);
 
   const acceptDiff = useCallback(() => {
     if (!editor) return;
@@ -145,7 +199,9 @@ export function useDocumentAI({ editor }: UseDocumentAIOptions) {
     isPaused,
     isLocalMode,
     isProcessing,
+    lastError,
     executeOperation,
+    retryLastOperation,
     acceptDiff,
     rejectDiff,
   };

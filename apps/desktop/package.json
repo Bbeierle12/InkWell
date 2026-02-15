@@ -5,6 +5,9 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
-    "typecheck": "echo 'Rust typecheck via cargo check'"
+    "build:debug": "tauri build --debug",
+    "build:local-inference": "tauri build -- --features local-inference",
+    "typecheck": "cd src-tauri && cargo check",
+    "test": "cd src-tauri && cargo test"
   }
 }

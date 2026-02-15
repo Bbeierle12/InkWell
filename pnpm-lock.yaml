@@ -117,6 +117,9 @@ importers:
         specifier: workspace:*
         version: link:../packages/shared
     devDependencies:
+      msw:
+        specifier: ^2.7.0
+        version: 2.12.10(@types/node@25.2.3)(typescript@5.9.3)
       vitest:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@25.2.3)(jsdom@28.0.0)(lightningcss@1.30.2)(msw@2.12.10(@types/node@25.2.3)(typescript@5.9.3))

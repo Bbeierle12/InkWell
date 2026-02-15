@@ -18,10 +18,12 @@ import type { SlashCommandItem } from '@inkwell/editor';
 import { Toolbar } from '@/components/Toolbar';
 import { BackpressureIndicator } from '@/components/BackpressureIndicator';
 import { EditorArea } from '@/components/EditorArea';
+import { SetupScreen } from '@/components/SetupScreen';
 import { useDocumentAI } from '@/hooks/useDocumentAI';
 import { useGhostText } from '@/hooks/useGhostText';
 import { useVoicePipeline } from '@/hooks/useVoicePipeline';
 import { useAutoSave } from '@/hooks/useAutoSave';
+import { isTauriEnvironment, checkModelsStatus } from '@/lib/tauri-bridge';
 
 const defaultCommands: SlashCommandItem[] = [
   { title: 'Rewrite', description: 'Rewrite selection in a new tone', command: 'rewrite' },
@@ -40,6 +42,29 @@ const operationMap: Record<string, OperationType> = {
 export default function Home() {
   const executeRef = useRef<(op: OperationType, args?: string) => void>(() => {});
   const [hasDiffActive, setHasDiffActive] = useState(false);
+  const [showSetup, setShowSetup] = useState(false);
+  const [setupChecked, setSetupChecked] = useState(false);
+
+  // Check if we need to show the setup screen (Tauri only, first run)
+  useEffect(() => {
+    async function checkSetup() {
+      if (!isTauriEnvironment()) {
+        setSetupChecked(true);
+        return;
+      }
+
+      const status = await checkModelsStatus();
+      if (status && !status.has_llm && !status.has_whisper) {
+        setShowSetup(true);
+      }
+      setSetupChecked(true);
+    }
+    checkSetup();
+  }, []);
+
+  const handleSetupComplete = useCallback(() => {
+    setShowSetup(false);
+  }, []);
 
   const editor = useEditor({
     extensions: [
@@ -77,7 +102,9 @@ export default function Home() {
     isPaused,
     isLocalMode,
     isProcessing,
+    lastError,
     executeOperation,
+    retryLastOperation,
     acceptDiff,
     rejectDiff,
   } = useDocumentAI({ editor });
@@ -120,6 +147,20 @@ export default function Home() {
     [executeOperation],
   );
 
+  // Show loading state while checking setup
+  if (!setupChecked) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <p className="text-gray-500 dark:text-gray-400">Loading...</p>
+      </main>
+    );
+  }
+
+  // Show setup screen for first-run model download
+  if (showSetup) {
+    return <SetupScreen onComplete={handleSetupComplete} />;
+  }
+
   return (
     <main className="min-h-screen flex flex-col">
       <Toolbar
@@ -132,6 +173,8 @@ export default function Home() {
         isPaused={isPaused}
         isLocalMode={isLocalMode}
         isProcessing={isProcessing}
+        lastError={lastError}
+        onRetry={retryLastOperation}
       />
       <div className="flex-1 max-w-4xl mx-auto w-full p-4 md:p-8">
         <EditorArea

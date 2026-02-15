@@ -1,15 +1,15 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-15T01:20:41Z
-version: 2.3
+last_updated: 2026-02-15T03:06:22Z
+version: 2.5
 author: Claude Code PM System
 ---
 
 # Progress: Inkwell
 
-## Current Status: Phase 8 MCP Workspace Context Integration — Fully Implemented
+## Current Status: Phase 10 Desktop Packaging & Offline Mode — Fully Implemented
 
-Phases 1-5 TDD scaffolding and implementation complete. Phase 7 voice pipeline complete. Phase 8 wires MCP workspace retrieval into the DocumentAI runtime: `WorkspaceRetriever` interface and `WorkspaceSnippet` type in shared, `WorkspaceIndexer` orchestrator (FileWatcher + chunker + simpleEmbed + VectorStore), async `ContextManager.build()` with workspace snippet retrieval and token budget allocation (20% of remaining budget), `DocumentAIServiceImpl` includes workspace snippets in Claude requests, VectorStore content storage fix, `simpleEmbed()` extracted to shared module. All 690 tests pass (612 TS + 78 Rust).
+Phases 1-8 complete. Phase 9 Web UI Polish complete (Toolbar, BackpressureIndicator, document persistence, auto-save). Phase 10 Desktop Packaging & Offline Mode complete: Rust bridge commands for file dialogs (`rfd`) and model management (`dirs`, `reqwest` streaming), SetupScreen component with model catalog and download progress, offline/online transition handling with AbortController mid-stream cancellation and retry, comprehensive tests. All 770 tests pass (686 TS + 84 Rust).
 
 ## Completed Work
 
@@ -326,6 +326,80 @@ Phases 1-5 TDD scaffolding and implementation complete. Phase 7 voice pipeline c
 - Updated `prompts.test.ts`: VoiceRefine "should return template" (was "should throw")
 - 5 new Rust tests: TranscribeAudioBytesRequest validation and serialization
 
+### Phase 9 — Web UI Polish (2026-02-15)
+
+**Toolbar (full implementation)**
+- Formatting buttons: Bold, Italic, Underline, Strikethrough, Code with active state tracking
+- Heading selector: Paragraph, H1, H2, H3 via `<select>` element
+- List buttons: Bullet list, Ordered list
+- AI Operations dropdown: Rewrite, Summarize, Expand, Critique
+- Voice button: Inline `<VoiceInput pipeline={...} />`
+- Mode indicator: Online (green) / Offline (amber) chip
+
+**BackpressureIndicator (full implementation)**
+- Renders null when all states false (non-intrusive)
+- Shows: "Suggestions paused" (amber), "Local mode" (blue), "AI thinking..." (gray pulse)
+- Error display with retry button
+
+**EditorArea (refactored from Editor.tsx)**
+- Presentational component receiving editor as prop
+- Conditional accept/reject buttons when diff preview active
+
+**page.tsx restructure**
+- Lifted `useEditor()` to page level with all extensions (StarterKit, Placeholder, Underline, GhostText, DiffPreview, AIUndo, SlashCommands)
+- Props passed to Toolbar, BackpressureIndicator, EditorArea
+- Setup screen check for first-run model download (Tauri only)
+
+**Document persistence**
+- `document-store.ts`: Zustand store with IndexedDB backend (save, load, list, delete)
+- `useAutoSave.ts`: 30-second interval auto-save on editor update events
+
+**Ghost Text Escape handler**
+- Escape key dismisses ghost text suggestion (added to existing Tab handler)
+
+**CSS additions**
+- Toolbar button styles, active states, separators, mode chip, dropdown, dark mode variants
+
+### Phase 10 — Desktop Packaging & Offline Mode (2026-02-15)
+
+**Task 10.1: Rust Bridge Commands for Desktop**
+- Added `rfd = "0.15"`, `dirs = "5"`, `reqwest = { version = "0.12", features = ["stream"] }`, `futures-util = "0.3"` to Cargo.toml
+- File dialog commands: `save_file_dialog`, `open_file_dialog` (via `rfd::AsyncFileDialog`)
+- File I/O commands: `write_text_file`, `read_text_file` (via `tokio::fs`)
+- Model management: `get_models_dir` (platform-specific via `dirs::data_dir()`), `check_models_status`, `download_model` (streaming with progress events)
+- Types: `FileFilter`, `ModelInfo`, `ModelsStatus`, `DownloadProgressEvent`
+- 7 new Rust tests for type serialization/deserialization
+- All 7 new commands registered in `lib.rs` invoke_handler
+
+**Task 10.1b: Icons and Bundle Config**
+- Generated placeholder PNG icons (32x32, 128x128, 128x128@2x) and icon.icns
+- Updated `desktop/package.json` with build:debug, build:local-inference, typecheck, test scripts
+
+**Task 10.2: TypeScript Bridge Functions**
+- `tauri-bridge.ts`: Added `ModelInfo`, `ModelsStatus`, `DownloadProgressEvent` interfaces
+- Bridge functions: `getModelsDir()`, `checkModelsStatus()`, `downloadModel(url, filename, onProgress?)`
+- Download uses Tauri event listener for streaming progress from Rust
+
+**Task 10.2b: SetupScreen Component (NEW)**
+- First-run model download experience shown when desktop app launches without models
+- Model catalog: llama-3.2-1b (0.8GB), llama-3.2-3b (2.0GB), whisper-base (142MB), whisper-small (466MB)
+- Download state machine: idle → downloading (progress bar) → done / error
+- Auto-skips when both model types already installed
+- Skip Setup / Refresh Status buttons
+- `formatBytes()` utility
+
+**Task 10.3: Offline/Online Transition Handling**
+- Enhanced `useDocumentAI.ts` with AbortController for mid-stream cancellation
+- `lastError` state + `retryLastOperation()` callback
+- Offline event aborts in-flight operations via `abortRef.current.abort()`
+- Online event clears errors
+- `BackpressureIndicator` updated with `lastError` and `onRetry` props
+
+**Task 10.3b: Offline/Online Tests (39 new tests)**
+- `BackpressureIndicator.test.ts` (8 tests): idle/null, paused, local mode, multi-state, error display, error hidden during processing, error + local mode
+- `useDocumentAI-transitions.test.ts` (21 tests): connectivity tracker state machine (start offline/online, transitions, error clearing, abort in-flight, rapid toggling, new op aborts previous, stale endOperation safety), retry logic (track/clear/preserve/execute), model status check behavior
+- `SetupScreen.test.ts` (18 tests): formatBytes (bytes/KB/MB/GB), download state machine (idle/downloading/progress/done/error), completion detection, model catalog validation
+
 ## Verification Results
 
 | Check | Result |
@@ -333,11 +407,13 @@ Phases 1-5 TDD scaffolding and implementation complete. Phase 7 voice pipeline c
 | `@inkwell/shared` tests | 15 passed (2 test files) |
 | `@inkwell/editor` tests | 190 passed (10 test files) |
 | `@inkwell/document-ai` tests | 303 passed (16 test files) |
-| `@inkwell/web` tests | 24 passed (4 test files) |
+| `@inkwell/web` tests | 97 passed (11 test files) |
 | `@inkwell/mcp-workspace` tests | 63 passed (10 test files) |
 | `@inkwell/evals` tests | 18 passed (2 test files) |
-| `inkwell-desktop` Rust tests | 78 passed (0 warnings) |
-| **Total tests** | **691 passed, 0 failed** |
+| `inkwell-desktop` Rust tests | 84 passed (0 warnings) |
+| **Total tests** | **770 passed, 0 failed** |
+| Web build (`next build`) | Static export successful |
+| Turbo pipeline | 12/12 tasks passed |
 | Typecheck (shared) | Clean |
 | Typecheck (mcp-workspace) | Clean |
 | Typecheck (evals) | Clean |
@@ -349,12 +425,13 @@ Phases 1-5 TDD scaffolding and implementation complete. Phase 7 voice pipeline c
 
 ## Immediate Next Steps
 
-1. **Download GGUF model** — Place a `.gguf` model file in `apps/desktop/src-tauri/models/` and load via `load_llm_model` bridge command
-2. **E2E tests** (Playwright) — critical editing flows, AI flows, offline/online transitions
-3. **Performance benchmarks** — TTFT targets, input latency, bridge throughput
-4. **Tier 2/3 evals** — Local 8B judge + Claude-as-judge implementations
-5. **Fix whisper-rs Windows build** — `whisper-rs-sys` bundled bindings are Linux-specific; needs MSVC include paths for fresh bindgen
-6. **TypeScript typecheck cleanup** — Fix editor/document-ai vitest globals in tsconfig
+1. **E2E tests** (Playwright) — critical editing flows, AI flows, offline/online transitions
+2. **Performance benchmarks** — TTFT targets, input latency, bridge throughput
+3. **Tier 2/3 evals** — Local 8B judge + Claude-as-judge implementations
+4. **Tauri production build** — Test full `tauri build` pipeline on target platforms
+5. **Model download URLs** — Populate MODEL_CATALOG URLs for actual model hosting (HuggingFace or self-hosted)
+6. **Fix whisper-rs Windows build** — `whisper-rs-sys` bundled bindings are Linux-specific; needs MSVC include paths for fresh bindgen
+7. **TypeScript typecheck cleanup** — Fix editor/document-ai vitest globals in tsconfig
 
 ## Known Issues
 
@@ -379,3 +456,5 @@ Phases 1-5 TDD scaffolding and implementation complete. Phase 7 voice pipeline c
 - 2026-02-14T22:06:59Z: Desktop runtime session — Fixed Tailwind v4 PostCSS plugin, updated llama-cpp-2 to v0.1.133 API, split Cargo features (local-llm/local-stt), added build.rs/icon/frontendDist path fix, installed LLVM for bindgen. 73 Rust tests pass. Desktop app launches with real Next.js frontend.
 - 2026-02-15T00:16:36Z: Phase 7 Voice Pipeline — VoiceRefine prompt, service VoiceRefine path, Tauri transcribe_audio_bytes command, audio-capture utility, useVoicePipeline hook, VoiceInput component, Editor integration. 675 tests pass (597 TS + 78 Rust).
 - 2026-02-15T01:20:41Z: Phase 8 MCP Workspace Context Integration — WorkspaceRetriever interface, WorkspaceIndexer orchestrator, async ContextManager.build() with workspace snippet retrieval, DocumentAIServiceImpl workspace integration, VectorStore content fix, simpleEmbed extraction. 691 tests pass (613 TS + 78 Rust).
+- 2026-02-15T02:00:00Z: Phase 9 Web UI Polish — Toolbar (formatting, headings, lists, AI dropdown, voice, mode indicator), BackpressureIndicator, EditorArea refactor, page.tsx restructure (lifted useEditor), document-store (Zustand + IndexedDB), useAutoSave, ghost text Escape handler, CSS additions. ~730 tests pass.
+- 2026-02-15T03:06:22Z: Phase 10 Desktop Packaging & Offline Mode — Rust bridge commands (rfd file dialogs, dirs model paths, reqwest streaming downloads), SetupScreen component (model catalog, download progress), offline/online transitions (AbortController cancellation, retry), 39 new tests. 770 tests pass (686 TS + 84 Rust).

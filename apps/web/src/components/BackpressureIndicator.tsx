@@ -4,17 +4,25 @@
  * BackpressureIndicator Component
  *
  * Shows status messages when suggestions are paused, running in local mode,
- * or AI is processing. Returns null when all states are inactive.
+ * AI is processing, or an error occurred. Returns null when all states are inactive.
  */
 
 interface BackpressureIndicatorProps {
   isPaused: boolean;
   isLocalMode: boolean;
   isProcessing: boolean;
+  lastError?: string | null;
+  onRetry?: () => void;
 }
 
-export function BackpressureIndicator({ isPaused, isLocalMode, isProcessing }: BackpressureIndicatorProps) {
-  if (!isPaused && !isLocalMode && !isProcessing) {
+export function BackpressureIndicator({
+  isPaused,
+  isLocalMode,
+  isProcessing,
+  lastError,
+  onRetry,
+}: BackpressureIndicatorProps) {
+  if (!isPaused && !isLocalMode && !isProcessing && !lastError) {
     return null;
   }
 
@@ -41,6 +49,20 @@ export function BackpressureIndicator({ isPaused, isLocalMode, isProcessing }: B
         <span className="flex items-center gap-1 text-gray-500 animate-pulse">
           <span className="inline-block w-2 h-2 rounded-full bg-gray-400" />
           AI thinking...
+        </span>
+      )}
+      {lastError && !isProcessing && (
+        <span className="flex items-center gap-2 text-red-600">
+          <span className="inline-block w-2 h-2 rounded-full bg-red-500" />
+          {lastError}
+          {onRetry && (
+            <button
+              className="underline hover:no-underline text-red-500"
+              onClick={onRetry}
+            >
+              Retry
+            </button>
+          )}
         </span>
       )}
     </div>

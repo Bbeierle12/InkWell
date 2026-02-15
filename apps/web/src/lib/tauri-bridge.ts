@@ -294,6 +294,92 @@ export async function openFromFile(
   }
 }
 
+// ── Model Management Commands ──
+
+export interface ModelInfo {
+  name: string;
+  filename: string;
+  size_bytes: number;
+  model_type: 'llm' | 'whisper';
+}
+
+export interface ModelsStatus {
+  models_dir: string;
+  llm_models: ModelInfo[];
+  whisper_models: ModelInfo[];
+  has_llm: boolean;
+  has_whisper: boolean;
+}
+
+interface DownloadProgressEvent {
+  model_name: string;
+  bytes_downloaded: number;
+  total_bytes: number | null;
+  progress_pct: number | null;
+  done: boolean;
+  error: string | null;
+}
+
+/**
+ * Get the platform-specific models directory path.
+ */
+export async function getModelsDir(): Promise<string | null> {
+  const invoke = await getTauriInvoke();
+  if (!invoke) return null;
+
+  try {
+    return (await invoke('get_models_dir')) as string;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check which models are installed locally.
+ */
+export async function checkModelsStatus(): Promise<ModelsStatus | null> {
+  const invoke = await getTauriInvoke();
+  if (!invoke) return null;
+
+  try {
+    return (await invoke('check_models_status')) as ModelsStatus;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Download a model from a URL with progress events.
+ *
+ * Listens to 'download-progress' events for progress updates.
+ * Returns the path to the downloaded file.
+ */
+export async function downloadModel(
+  url: string,
+  filename: string,
+  onProgress?: (event: DownloadProgressEvent) => void,
+): Promise<string | null> {
+  const invoke = await getTauriInvoke();
+  const listen = await getTauriListen();
+  if (!invoke) return null;
+
+  let unlisten: (() => void) | null = null;
+
+  try {
+    if (listen && onProgress) {
+      unlisten = await listen('download-progress', (event) => {
+        onProgress(event.payload as DownloadProgressEvent);
+      });
+    }
+
+    return (await invoke('download_model', { url, filename })) as string;
+  } catch {
+    return null;
+  } finally {
+    unlisten?.();
+  }
+}
+
 // ── System Commands ──
 
 /**

@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T22:06:59Z
-version: 1.3
+last_updated: 2026-02-15T03:06:22Z
+version: 1.4
 author: Claude Code PM System
 ---
 
@@ -45,12 +45,16 @@ author: Claude Code PM System
 
 ## Desktop
 
-| Technology | Purpose |
-|-----------|---------|
-| Tauri | Desktop shell (Rust ↔ JS bridge) |
-| serde / serde_json | Rust serialization |
-| tokio | Async runtime |
-| criterion | Benchmarks |
+| Technology | Version | Purpose |
+|-----------|---------|---------|
+| Tauri | 2.x | Desktop shell (Rust ↔ JS bridge) |
+| serde / serde_json | | Rust serialization |
+| tokio | | Async runtime |
+| rfd | 0.15 | Native file dialogs (open/save) |
+| dirs | 5 | Platform-specific directory paths |
+| reqwest | 0.12 (stream) | HTTP client for model downloads |
+| futures-util | 0.3 | Stream processing for download progress |
+| criterion | | Benchmarks |
 
 ## Data / Search
 
@@ -98,3 +102,8 @@ author: Claude Code PM System
 - Cargo features: `local-llm` (llama-cpp-2), `local-stt` (whisper-rs), `local-inference` (both)
 - LLVM/libclang required for bindgen on Windows: set `LIBCLANG_PATH="C:/Program Files/LLVM/bin"`
 - Turborepo caches typecheck and lint; tests/evals always uncached
+- Model storage: platform-specific via `dirs::data_dir()` → `{data_dir}/inkwell/models/`
+  - Linux: `~/.local/share/inkwell/models/`
+  - macOS: `~/Library/Application Support/inkwell/models/`
+  - Windows: `%APPDATA%/inkwell/models/`
+- Desktop build scripts: `build:debug` (debug symbols), `build:local-inference` (with local model features)
