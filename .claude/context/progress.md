@@ -1,15 +1,15 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T22:06:59Z
-version: 2.1
+last_updated: 2026-02-15T00:16:36Z
+version: 2.2
 author: Claude Code PM System
 ---
 
 # Progress: Inkwell
 
-## Current Status: Desktop Runtime & Build Fixes — Local Inference Running
+## Current Status: Phase 7 Voice Pipeline — Fully Implemented
 
-Phases 1-5 TDD scaffolding and implementation complete. This session focused on getting the Tauri desktop app running with local LLM inference. Key fixes: installed LLVM/libclang for bindgen FFI generation, updated `llama-cpp-2` crate usage to v0.1.133 API (new `LlamaSampler` chain, `LlamaBatch` module path, `token_to_piece` replacing deprecated `token_to_str`), split `local-inference` Cargo feature into granular `local-llm`/`local-stt` (whisper-rs has Windows cross-compilation issues), added missing Tauri `build.rs` and window icon, fixed `frontendDist` path to point at Next.js static export (`../../web/out`), installed `@tailwindcss/postcss` for Tailwind CSS v4 compatibility, and added missing `@tauri-apps/api`/`@tiptap/core` web dependencies. All 73 Rust tests pass with `local-llm` feature enabled. Next.js static export builds successfully. Desktop app launches with real frontend.
+Phases 1-5 TDD scaffolding and implementation complete. Phase 7 voice pipeline fully implemented: VoiceRefine prompt template, DocumentAI service VoiceRefine path (raw text return), Tauri `transcribe_audio_bytes` Rust command (accepts `Vec<f32>` directly), `transcribeAudioBytes` TS bridge function, `audio-capture.ts` PCM mic capture utility (16kHz mono with resampling), full `useVoicePipeline` hook orchestrator (FSM transitions, AbortController cancellation, offline fallback), `VoiceInput` component (state-driven UI with timer, ARIA), and Editor integration. All 412 tests pass (334 TS + 78 Rust).
 
 ## Completed Work
 
@@ -172,7 +172,7 @@ Phases 1-5 TDD scaffolding and implementation complete. This session focused on 
 - Created VCR fixtures, documentation (ARCHITECTURE, TEST-PLAN, INVARIANTS, PROMPTS)
 - Post-scaffolding fixes: workspace deps, tsconfig, jsdom, shared test file
 
-### TDD Phase 5 — MCP Workspace + Evals + Voice Pipeline (2026-02-14)
+### TDD Phase 5 — MCP Workspace + Evals + Voice Pipeline Types (2026-02-14)
 
 **Section A: Shared Types + Voice Pipeline (15 tests in shared)**
 - Added MCP types: `SearchResult`, `AnalysisResult`, `StyleGuideResult`, `MCPServerConfig`
@@ -235,17 +235,67 @@ Phases 1-5 TDD scaffolding and implementation complete. This session focused on 
 - `useGhostText.ts`: Full hook — debounced inline suggestions, accept/dismiss
 - `Editor.tsx`: TipTap useEditor with StarterKit + GhostText + DiffPreview + AIUndo + SlashCommands
 
+### Implementation Phase 7 — Voice Pipeline (2026-02-15)
+
+**VoiceRefine Prompt Template**
+- `prompts/voice-refine.ts`: System prompt for cleaning filler words, fixing punctuation, matching document style
+- User template with `{{document_context}}`, `{{style_profile}}`, `{{raw_transcript}}`
+- Returns plain text (not JSON edit instructions) — unique among all operation templates
+
+**DocumentAI Service VoiceRefine Path**
+- Added `rawTranscript?: string` to `AIOperationRequest`
+- VoiceRefine collects raw text from stream (skips `collectAndParse` JSON parsing)
+- Returns `{ instructions: [], raw: cleanedText, model }` for raw text operations
+- Routes VoiceRefine to Sonnet (or Local for private docs)
+
+**Tauri Bridge — transcribe_audio_bytes Command**
+- `TranscribeAudioBytesRequest { samples: Vec<f32>, language: Option<String> }` — accepts PCM directly, no temp file
+- Rust command validates samples (empty, too short, NaN/Inf) then passes to `state.stt.transcribe()`
+- TS bridge: `transcribeAudioBytes(samples: Float32Array, language?: string)` — converts via `Array.from()` for Tauri serialization
+- 5 new Rust tests for validation + type serialization
+
+**Audio Capture Utility (NEW)**
+- `audio-capture.ts`: Raw PCM mic capture at 16kHz mono
+- `getUserMedia({ audio: { channelCount: 1, sampleRate: 16000 } })` + `AudioContext` + `ScriptProcessorNode`
+- Linear interpolation resampling when browser doesn't honor 16kHz
+- `AudioCaptureSession.stop()` → concatenated Float32Array, `.cancel()` → releases all resources
+
+**useVoicePipeline Hook (full implementation, replaced stub)**
+- Orchestrator: FSM `transition()` from `@inkwell/shared`, AbortController cancellation at every stage
+- Pipeline: startRecording → stopRecording (transcribe → refine → insert) → auto-reset (500ms)
+- Offline fallback: if Claude refinement fails, raw transcript inserted directly
+- Inserts at `editor.state.selection.from` via `editor.chain().insertContentAt()`
+- Checks `isTauriEnvironment()` for availability (desktop-only feature)
+
+**VoiceInput Component (full implementation, replaced stub)**
+- State-driven rendering: Idle (mic), Recording (pulsing red + timer + cancel), Transcribing (spinner), Refining (spinner), Done (green flash), Error (message + dismiss)
+- ARIA labels and live regions throughout
+- Recording timer updated at 200ms interval
+
+**Editor Integration**
+- `useVoicePipeline({ editor })` called after existing hooks
+- `<VoiceInput pipeline={voicePipeline} />` rendered above editor content area
+
+**Tests (27 new tests across 4 files)**
+- `useVoicePipeline.test.ts` (8): FSM transitions (happy path, error, reset, invalid), bridge integration, VoiceRefine prompt template
+- `audio-capture.test.ts` (5): mic constraints, chunk concatenation, resource cleanup (stop/cancel), permission denied
+- `tauri-bridge-voice.test.ts` (2): transcribeAudioBytes null in non-Tauri (with/without language)
+- `voice-refine.test.ts` (4): route to Sonnet, raw text return, rawTranscript in prompt, private → Local
+- Updated `prompts.test.ts`: VoiceRefine "should return template" (was "should throw")
+- 5 new Rust tests: TranscribeAudioBytesRequest validation and serialization
+
 ## Verification Results
 
 | Check | Result |
 |-------|--------|
 | `@inkwell/shared` tests | 15 passed (2 test files) |
 | `@inkwell/editor` tests | 190 passed (10 test files) |
-| `@inkwell/document-ai` tests | 285 passed (14 test files) |
+| `@inkwell/document-ai` tests | 295 passed (15 test files) |
+| `@inkwell/web` tests | 24 passed (4 test files) |
 | `@inkwell/mcp-workspace` tests | 55 passed (9 test files) |
 | `@inkwell/evals` tests | 18 passed (2 test files) |
-| `inkwell-desktop` Rust tests | 57 passed (0 warnings) |
-| **Total tests** | **620 passed, 0 failed** |
+| `inkwell-desktop` Rust tests | 78 passed (0 warnings) |
+| **Total tests** | **675 passed, 0 failed** |
 | Typecheck (shared) | Clean |
 | Typecheck (mcp-workspace) | Clean |
 | Typecheck (evals) | Clean |
@@ -285,3 +335,4 @@ Phases 1-5 TDD scaffolding and implementation complete. This session focused on 
 - 2026-02-14T20:40:52Z: Implementation Phase 5 complete — 620 tests (563 TS + 57 Rust), Claude API integration (prompt templates, response parser, DocumentAIServiceImpl, slash commands, web app wiring)
 - 2026-02-14T21:14:34Z: All phases committed to main (6 commits). Working tree clean. Ready for E2E/eval phase.
 - 2026-02-14T22:06:59Z: Desktop runtime session — Fixed Tailwind v4 PostCSS plugin, updated llama-cpp-2 to v0.1.133 API, split Cargo features (local-llm/local-stt), added build.rs/icon/frontendDist path fix, installed LLVM for bindgen. 73 Rust tests pass. Desktop app launches with real Next.js frontend.
+- 2026-02-15T00:16:36Z: Phase 7 Voice Pipeline — VoiceRefine prompt, service VoiceRefine path, Tauri transcribe_audio_bytes command, audio-capture utility, useVoicePipeline hook, VoiceInput component, Editor integration. 675 tests pass (597 TS + 78 Rust).

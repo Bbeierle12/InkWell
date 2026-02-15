@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T20:40:52Z
-version: 1.1
+last_updated: 2026-02-15T00:16:36Z
+version: 1.2
 author: Claude Code PM System
 ---
 
@@ -40,10 +40,14 @@ author: Claude Code PM System
 - `/critique` — Deep analysis with suggestions
 - ProseMirror plugin with floating command palette, keyboard navigation, filtered search
 
-### 3. Voice Input
-- whisper.cpp local transcription
-- Voice Refine operation cleans up transcription
-- Works offline via desktop app
+### 3. Voice Input [IMPLEMENTED]
+- whisper.cpp local transcription via `transcribe_audio_bytes` Rust command (accepts `Vec<f32>` directly)
+- Audio capture utility: 16kHz mono PCM via getUserMedia + ScriptProcessorNode with resampling
+- Voice Refine operation cleans up transcription (Claude Sonnet, plain text output)
+- Full pipeline hook: record → transcribe → refine → insert at cursor
+- Offline fallback: raw transcript inserted if Claude unavailable
+- State-driven VoiceInput component with timer, ARIA labels, cancel at any stage
+- Desktop-only (requires Tauri environment)
 
 ### 4. Diff Preview [IMPLEMENTED]
 - Shows before/after for AI rewrites (inline red strikethrough / green underline)

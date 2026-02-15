@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T22:06:59Z
-version: 1.8
+last_updated: 2026-02-15T00:16:36Z
+version: 1.9
 author: Claude Code PM System
 ---
 
@@ -48,7 +48,7 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │   │           ├── index.ts      # clampPosition, safeInsertText, safeDelete, etc.
 │   │           └── __tests__/    # integrity.test.ts (9), integrity.property.test.ts (3)
 │   │
-│   ├── document-ai/             # @inkwell/document-ai (285 tests)
+│   ├── document-ai/             # @inkwell/document-ai (295 tests)
 │   │   └── src/
 │   │       ├── router/          # Model routing with network awareness [IMPLEMENTED]
 │   │       │   ├── index.ts     # ModelRouter: setOnline/isOnline, CloudUnavailableError
@@ -72,14 +72,15 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │   │       │   ├── summarize.ts # Summarize prompts
 │   │       │   ├── expand.ts    # Expand prompts
 │   │       │   ├── critique.ts  # Critique prompts (non-editing output)
-│   │       │   └── __tests__/   # prompts.test.ts (8)
+│   │       │   ├── voice-refine.ts # Voice transcription cleanup (plain text output)
+│   │       │   └── __tests__/   # prompts.test.ts (9)
 │   │       ├── claude/          # Streaming client, SSE parser, token counter, response parser [IMPLEMENTED]
 │   │       │   ├── client.ts    # ClaudeClient.stream() with system + cache_control
 │   │       │   ├── response-parser.ts  # parseAIResponse(), collectAndParse()
 │   │       │   ├── token-counter.ts    # estimateTokens() + countTokens() (API with fallback)
 │   │       │   └── __tests__/   # contract.test.ts (6), stream-errors.test.ts (8), stop-reason.test.ts (3), response-parser.test.ts (6), token-counter.test.ts (4)
-│   │       ├── service.ts       # DocumentAIServiceImpl orchestration [IMPLEMENTED]
-│   │       ├── __tests__/       # service.test.ts (5)
+│   │       ├── service.ts       # DocumentAIServiceImpl orchestration [IMPLEMENTED] (+ VoiceRefine raw text path)
+│   │       ├── __tests__/       # service.test.ts (5), voice-refine.test.ts (4)
 │   │       ├── test-setup.ts    # MSW server + privacy canary interceptor
 │   │       └── types.ts         # DocumentAIService interface
 │   │
@@ -104,12 +105,14 @@ inkwell/                          # Root (pnpm workspaces + turborepo)
 │           └── index.ts          # Expanded barrel exports
 │
 ├── apps/
-│   ├── web/                     # @inkwell/web (Next.js 15)
+│   ├── web/                     # @inkwell/web (24 tests)
 │   │   └── src/
 │   │       ├── app/             # App Router (layout, page, globals.css)
-│   │       ├── components/      # Editor, Toolbar, DiffPreview, Backpressure, Voice
-│   │       ├── hooks/           # useDocumentAI, useGhostText, useVoicePipeline
-│   │       └── lib/             # document-ai-instance singleton
+│   │       ├── components/      # Editor, Toolbar, DiffPreview, Backpressure, VoiceInput
+│   │       ├── hooks/           # useDocumentAI, useGhostText, useVoicePipeline [IMPLEMENTED]
+│   │       │   └── __tests__/   # useVoicePipeline.test.ts (8)
+│   │       └── lib/             # document-ai-instance, tauri-bridge, audio-capture
+│   │           └── __tests__/   # audio-capture.test.ts (5), tauri-bridge-voice.test.ts (2)
 │   │
 │   └── desktop/                 # @inkwell/desktop (Tauri)
 │       ├── src-tauri/

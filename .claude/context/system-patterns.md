@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T22:06:59Z
-version: 1.9
+last_updated: 2026-02-15T00:16:36Z
+version: 2.0
 author: Claude Code PM System
 ---
 
@@ -156,22 +156,26 @@ Documents are split and indexed for retrieval:
 - `simpleEmbed()`: bag-of-words hash → 384-dim normalized vector for testing
 - `FileWatcher`: injectable fs module via constructor for testability (6 tests)
 
-### 13. Voice Pipeline FSM [IMPLEMENTED + TESTED]
-Voice-to-text pipeline uses a finite state machine:
-- States: Idle → Recording → Transcribing → Refining → Done (happy path)
-- Any state → Error on ErrorOccurred; Error/Done → Idle on Reset
-- `transition(current, event)` returns `VoicePipelineTransition | null` for invalid transitions
-- 10 tests covering all valid transitions and invalid event rejection
+### 13. Voice Pipeline [FULLY IMPLEMENTED + TESTED]
+Full voice-to-document pipeline: speak → transcribe locally via Whisper → refine with Claude → insert into document:
+- **FSM**: States: Idle → Recording → Transcribing → Refining → Done (happy path); Any → Error on ErrorOccurred; Error/Done → Idle on Reset
+- `transition(current, event)` returns `VoicePipelineTransition | null` for invalid transitions (10 tests in shared)
+- **Audio Capture**: `audio-capture.ts` — getUserMedia at 16kHz mono + ScriptProcessorNode, linear interpolation resampling when browser doesn't honor sample rate, `AudioCaptureSession.stop()` returns concatenated Float32Array (5 tests)
+- **Tauri Bridge**: `transcribe_audio_bytes` Rust command accepts `Vec<f32>` directly (no temp file), TS `transcribeAudioBytes()` converts Float32Array via `Array.from()` (5 Rust tests + 2 TS tests)
+- **VoiceRefine**: Prompt template returns plain text (not JSON edit instructions); service collects raw text from stream; routes to Sonnet (or Local for private docs) (4 tests)
+- **useVoicePipeline Hook**: Full orchestrator using FSM transitions, AbortController cancellation, offline fallback (raw transcript inserted if Claude fails), auto-reset to Idle after 500ms, inserts at `editor.state.selection.from` (8 tests)
+- **VoiceInput Component**: State-driven UI (Idle: mic button, Recording: pulsing red + timer + cancel, Transcribing/Refining: spinner + cancel, Done: green flash, Error: message + dismiss), ARIA labels, desktop-only with `isTauriEnvironment()` check
 
 ### 14. Prompt Template System [IMPLEMENTED + TESTED]
 AI operations use structured prompt templates:
 - `getPromptTemplate(operation)` maps `OperationType` to `PromptTemplate { system, userTemplate }`
 - `renderPrompt(template, vars)` performs `{{placeholder}}` substitution on userTemplate
-- Each operation has its own template file: rewrite, summarize, expand, critique
+- Each operation has its own template file: rewrite, summarize, expand, critique, voice-refine
 - Rewrite/summarize/expand output: JSON array of `AIEditInstruction[]`
 - Critique output: `{observations: string[], suggestions: string[]}` (non-editing)
+- VoiceRefine output: plain text (cleaned transcription, not JSON)
 - InlineSuggest has no template (local-only, no Claude call)
-- 8 tests covering all operations, placeholder substitution, error cases
+- 9 tests covering all operations, placeholder substitution, error cases
 
 ### 15. Response Parser Pattern [IMPLEMENTED + TESTED]
 Streaming Claude output is parsed into structured instructions:

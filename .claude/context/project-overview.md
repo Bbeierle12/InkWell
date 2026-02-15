@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T22:06:59Z
-version: 1.9
+last_updated: 2026-02-15T00:16:36Z
+version: 2.0
 author: Claude Code PM System
 ---
 
@@ -31,12 +31,12 @@ inkwell/
 
 ## Current State
 
-- **Phase**: Implementation Phase 5 complete + Desktop runtime fixes
-- **Files**: ~190 source files + 37 test files with real assertions
-- **Tests**: 636 tests passing (563 TS + 73 Rust)
-  - `@inkwell/shared`: 15 | `@inkwell/editor`: 190 | `@inkwell/document-ai`: 285
-  - `@inkwell/mcp-workspace`: 55 | `@inkwell/evals`: 18 | Rust: 73 (with `local-llm` feature)
-- **Implementations**: Schema, router (+ network awareness, offline fallback), AI undo (3-phase commit + closeHistory), ghost text (+ TTFT instrumentation), collaboration, origin filter, transaction utilities, queue manager (+ debouncer, DocumentAIQueue), context manager, reconciler (+ typed ReconcileResult, overlap detection, stale-deleted detection, schema-aware validation), diff preview (inline + floating toolbar), Claude streaming client (+ prompt caching), SSE parser, token counter (+ real API), response parser, prompt templates (4 operations), DocumentAIServiceImpl orchestration, SlashCommands extension, web app Editor + hooks, MCP server (4 tools), document chunker, vector store, file watcher, protocol adapter, eval comparison metrics, voice pipeline FSM, local inference engines (llama/whisper), bridge validators
+- **Phase**: Phase 7 Voice Pipeline complete
+- **Files**: ~200 source files + 41 test files with real assertions
+- **Tests**: 675 tests passing (597 TS + 78 Rust)
+  - `@inkwell/shared`: 15 | `@inkwell/editor`: 190 | `@inkwell/document-ai`: 295
+  - `@inkwell/web`: 24 | `@inkwell/mcp-workspace`: 55 | `@inkwell/evals`: 18 | Rust: 78 (with `local-llm` feature)
+- **Implementations**: Schema, router (+ network awareness, offline fallback), AI undo (3-phase commit + closeHistory), ghost text (+ TTFT instrumentation), collaboration, origin filter, transaction utilities, queue manager (+ debouncer, DocumentAIQueue), context manager, reconciler (+ typed ReconcileResult, overlap detection, stale-deleted detection, schema-aware validation), diff preview (inline + floating toolbar), Claude streaming client (+ prompt caching), SSE parser, token counter (+ real API), response parser, prompt templates (5 operations incl. VoiceRefine), DocumentAIServiceImpl orchestration, SlashCommands extension, web app Editor + hooks, MCP server (4 tools), document chunker, vector store, file watcher, protocol adapter, eval comparison metrics, voice pipeline (FSM + audio capture + hook + component + Tauri bridge), local inference engines (llama/whisper), bridge validators
 - **Typecheck**: Clean for shared, mcp-workspace, evals packages
 - **Dependencies**: 463+ npm packages installed (+ zod v4 for MCP)
 

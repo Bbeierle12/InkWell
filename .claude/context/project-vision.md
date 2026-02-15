@@ -1,7 +1,7 @@
 ---
 created: 2026-02-14T00:11:35Z
-last_updated: 2026-02-14T21:14:34Z
-version: 1.1
+last_updated: 2026-02-15T00:16:36Z
+version: 1.2
 author: Claude Code PM System
 ---
 
@@ -37,7 +37,7 @@ Inkwell aims to be the definitive AI-native word processor — an editor where A
 - Build Tauri shell with Rust ↔ JS bridge
 - Integrate llama.cpp for local inference
 - Integrate whisper.cpp for voice-to-text
-- 57 Rust tests passing
+- 78 Rust tests passing
 
 ### Phase 5: MCP & Workspace Intelligence [COMPLETE]
 - Build MCP workspace server (4 tools)
@@ -45,6 +45,15 @@ Inkwell aims to be the definitive AI-native word processor — an editor where A
 - Create style guide extraction
 - Enable cross-document context for AI operations
 - 55 MCP workspace tests passing
+
+### Phase 7: Voice Pipeline [COMPLETE]
+- VoiceRefine prompt template (plain text output, not JSON)
+- DocumentAI service VoiceRefine path with raw text collection
+- Tauri `transcribe_audio_bytes` command (Vec<f32> PCM, no temp files)
+- Audio capture utility (16kHz mono, ScriptProcessorNode, resampling)
+- Full useVoicePipeline hook (FSM orchestrator, AbortController, offline fallback)
+- VoiceInput component (state-driven UI, ARIA, recording timer)
+- 27 new tests across 4 test files
 
 ### Phase 6: Polish & Quality (Current)
 - Pass all 14 system invariants
