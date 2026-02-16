@@ -26,6 +26,7 @@ import { useDocumentAI } from '@/hooks/useDocumentAI';
 import { useGhostText } from '@/hooks/useGhostText';
 import { useVoicePipeline } from '@/hooks/useVoicePipeline';
 import { useAutoSave } from '@/hooks/useAutoSave';
+import { useFileOpen } from '@/hooks/useFileOpen';
 import { useDocumentStore } from '@/lib/document-store';
 import { useSettingsStore, FONT_FAMILY_MAP, FONT_SIZE_MAP, EDITOR_WIDTH_MAP } from '@/lib/settings-store';
 import { deriveTitleFromContent } from '@/lib/document-utils';
@@ -128,6 +129,7 @@ export default function Home() {
   useGhostText({ editor, enabled: isReady && ghostTextEnabled });
   const voicePipeline = useVoicePipeline({ editor });
   useAutoSave({ editor });
+  useFileOpen({ editor });
 
   // Update spellcheck attribute when setting changes
   useEffect(() => {

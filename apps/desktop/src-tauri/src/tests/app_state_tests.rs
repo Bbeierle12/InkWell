@@ -6,7 +6,7 @@
 #[cfg(test)]
 mod tests {
     use std::io::Write;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     use crate::AppState;
     use crate::inference::llama::LlamaEngine;
@@ -50,6 +50,7 @@ mod tests {
         let state = AppState {
             llm: Arc::new(LlamaEngine::new(Box::new(MockLlmBackend::new()))),
             stt: Arc::new(WhisperEngine::new(Box::new(MockSttBackend::new()))),
+            pending_file: Arc::new(Mutex::new(None)),
         };
 
         let f = temp_gguf_file();
@@ -74,6 +75,7 @@ mod tests {
         let state = AppState {
             llm: Arc::new(LlamaEngine::new(Box::new(MockLlmBackend::new()))),
             stt: Arc::new(WhisperEngine::new(Box::new(MockSttBackend::new()))),
+            pending_file: Arc::new(Mutex::new(None)),
         };
 
         let f = temp_bin_file();
@@ -93,6 +95,7 @@ mod tests {
         let state = AppState {
             llm: Arc::new(LlamaEngine::new(Box::new(StubLlmBackend))),
             stt: Arc::new(WhisperEngine::new(Box::new(StubSttBackend))),
+            pending_file: Arc::new(Mutex::new(None)),
         };
 
         // Stub LLM: load returns error about feature flag
@@ -122,6 +125,7 @@ mod tests {
         let state = Arc::new(AppState {
             llm: Arc::new(LlamaEngine::new(Box::new(MockLlmBackend::new()))),
             stt: Arc::new(WhisperEngine::new(Box::new(MockSttBackend::new()))),
+            pending_file: Arc::new(Mutex::new(None)),
         });
 
         let f = temp_gguf_file();
@@ -162,6 +166,7 @@ mod tests {
         let state = AppState {
             llm: Arc::new(LlamaEngine::new(Box::new(MockLlmBackend::new()))),
             stt: Arc::new(WhisperEngine::new(Box::new(MockSttBackend::new()))),
+            pending_file: Arc::new(Mutex::new(None)),
         };
 
         let f = temp_gguf_file();

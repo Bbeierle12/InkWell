@@ -676,6 +676,20 @@ pub async fn download_model(
     Ok(dest.to_string_lossy().to_string())
 }
 
+// ─────────────────────── File-Open Pipeline ───────────────────────────
+
+/// Get and clear the pending file path from CLI args or OS file-open events.
+///
+/// This is a one-shot consumption: the pending file is cleared after reading
+/// so subsequent calls return None.
+#[tauri::command]
+pub async fn get_pending_file(
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    let mut pending = state.pending_file.lock().map_err(|e| e.to_string())?;
+    Ok(pending.take())
+}
+
 /// Simple GPU detection heuristic.
 fn detect_gpu() -> bool {
     // On Windows, check for common GPU indicators

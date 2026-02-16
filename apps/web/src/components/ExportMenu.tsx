@@ -3,14 +3,18 @@
 /**
  * ExportMenu Component
  *
- * Dropdown menu for exporting documents as Markdown.
+ * Dropdown menu for exporting documents as Markdown or .inkwell format.
  * In Tauri (desktop), also provides native Save/Open file dialogs.
  */
 
 import { useState, useCallback } from 'react';
 import type { Editor } from '@tiptap/core';
 import { editorJsonToMarkdown } from '@/lib/markdown-export';
+import { markdownToEditorJson } from '@/lib/markdown-import';
+import { serializeInkwellFile, deserializeInkwellFile } from '@/lib/inkwell-format';
 import { isTauriEnvironment, saveToFile, openFromFile } from '@/lib/tauri-bridge';
+import { useDocumentStore } from '@/lib/document-store';
+import { countWordsFromContent } from '@/lib/document-utils';
 
 interface ExportMenuProps {
   editor: Editor | null;
@@ -19,6 +23,7 @@ interface ExportMenuProps {
 export function ExportMenu({ editor }: ExportMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const { title, setTitle, currentDocumentId } = useDocumentStore();
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -54,6 +59,22 @@ export function ExportMenu({ editor }: ExportMenuProps) {
     showToast('Download started');
   }, [getMarkdown, showToast]);
 
+  const handleSaveAsInkwell = useCallback(async () => {
+    if (!editor) return;
+    try {
+      const json = editor.getJSON() as Record<string, unknown>;
+      const wordCount = countWordsFromContent(json);
+      const inkwellStr = serializeInkwellFile(title, json, { wordCount });
+      await saveToFile(inkwellStr, [
+        { name: 'Inkwell Document', extensions: ['inkwell'] },
+      ]);
+      showToast('File saved');
+    } catch {
+      showToast('Save failed');
+    }
+    setIsOpen(false);
+  }, [editor, title, showToast]);
+
   const handleSaveToFile = useCallback(async () => {
     const md = getMarkdown();
     try {
@@ -68,17 +89,31 @@ export function ExportMenu({ editor }: ExportMenuProps) {
   const handleOpenFromFile = useCallback(async () => {
     if (!editor) return;
     try {
-      const content = await openFromFile([{ name: 'Markdown', extensions: ['md', 'txt'] }]);
-      if (content) {
-        // Insert file content as plain text
-        editor.commands.setContent(`<p>${content}</p>`);
-        showToast('File opened');
+      const result = await openFromFile([
+        { name: 'Inkwell Document', extensions: ['inkwell'] },
+        { name: 'Markdown', extensions: ['md', 'txt'] },
+      ]);
+      if (result) {
+        const { path, content } = result;
+        if (path.endsWith('.inkwell')) {
+          const schema = deserializeInkwellFile(content);
+          editor.commands.setContent(schema.content);
+          setTitle(schema.metadata.title);
+          showToast('Inkwell document opened');
+        } else if (path.endsWith('.md')) {
+          const doc = markdownToEditorJson(content);
+          editor.commands.setContent(doc);
+          showToast('Markdown file opened');
+        } else {
+          editor.commands.setContent(`<p>${content}</p>`);
+          showToast('File opened');
+        }
       }
     } catch {
       showToast('Open failed');
     }
     setIsOpen(false);
-  }, [editor, showToast]);
+  }, [editor, setTitle, showToast]);
 
   const isTauri = isTauriEnvironment();
 
@@ -117,9 +152,16 @@ export function ExportMenu({ editor }: ExportMenuProps) {
               <button
                 className="inkwell-dropdown-item"
                 role="menuitem"
+                onClick={handleSaveAsInkwell}
+              >
+                Save as .inkwell...
+              </button>
+              <button
+                className="inkwell-dropdown-item"
+                role="menuitem"
                 onClick={handleSaveToFile}
               >
-                Save to File...
+                Save as Markdown...
               </button>
               <button
                 className="inkwell-dropdown-item"

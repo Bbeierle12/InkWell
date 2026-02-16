@@ -380,6 +380,61 @@ export async function downloadModel(
   }
 }
 
+// ── File-Open Pipeline Commands ──
+
+/**
+ * Get and clear the pending file path from CLI args or OS file-open events.
+ * Returns null when not in Tauri or no pending file.
+ */
+export async function getPendingFile(): Promise<string | null> {
+  const invoke = await getTauriInvoke();
+  if (!invoke) return null;
+
+  try {
+    return (await invoke('get_pending_file')) as string | null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Listen for file-open-request events from the Rust backend.
+ * These are emitted when the OS opens a file via association or deep link.
+ * Returns an unlisten function, or null when not in Tauri.
+ */
+export async function onFileOpenRequest(
+  callback: (path: string) => void,
+): Promise<(() => void) | null> {
+  const listen = await getTauriListen();
+  if (!listen) return null;
+
+  try {
+    return await listen('file-open-request', (event) => {
+      const path = event.payload as string;
+      if (path) {
+        callback(path);
+      }
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read a file by absolute path. Convenience alias for the read_text_file command.
+ * Returns the file content or null.
+ */
+export async function readFileByPath(path: string): Promise<string | null> {
+  const invoke = await getTauriInvoke();
+  if (!invoke) return null;
+
+  try {
+    return (await invoke('read_text_file', { path })) as string;
+  } catch {
+    return null;
+  }
+}
+
 // ── System Commands ──
 
 /**
