@@ -1,0 +1,581 @@
+'use client';
+
+/**
+ * SettingsModal Component
+ *
+ * Tabbed modal for managing all user settings: Appearance, Editor,
+ * AI, Data & Privacy, and About. All settings except API key apply
+ * immediately on change. Persisted via the settings store (localStorage).
+ */
+
+import { useState, useCallback, useEffect, useRef } from 'react';
+import {
+  useSettingsStore,
+  FONT_FAMILY_MAP,
+  FONT_SIZE_MAP,
+  EDITOR_WIDTH_MAP,
+} from '@/lib/settings-store';
+import type {
+  ThemeMode,
+  EditorFontFamily,
+  EditorFontSize,
+  EditorWidth,
+  RoutingModeOption,
+  GhostTextDelay,
+  AutoSaveInterval,
+} from '@/lib/settings-store';
+import { useDocumentStore } from '@/lib/document-store';
+import { editorJsonToMarkdown } from '@/lib/markdown-export';
+import { destroyDocumentAI } from '@/lib/document-ai-instance';
+
+type TabId = 'appearance' | 'editor' | 'ai' | 'data' | 'about';
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: 'appearance', label: 'Appearance' },
+  { id: 'editor', label: 'Editor' },
+  { id: 'ai', label: 'AI' },
+  { id: 'data', label: 'Data' },
+  { id: 'about', label: 'About' },
+];
+
+interface SettingsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+  const [activeTab, setActiveTab] = useState<TabId>('appearance');
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isOpen, onClose]);
+
+  // Focus trap: focus modal on open
+  useEffect(() => {
+    if (isOpen && modalRef.current) {
+      modalRef.current.focus();
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="inkwell-modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      role="presentation"
+    >
+      <div
+        ref={modalRef}
+        className="inkwell-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Settings"
+        tabIndex={-1}
+      >
+        <div className="inkwell-modal-header">
+          <span className="inkwell-modal-title">Settings</span>
+          <button
+            className="inkwell-modal-close"
+            onClick={onClose}
+            aria-label="Close settings"
+          >
+            &times;
+          </button>
+        </div>
+
+        <div className="inkwell-modal-tabs" role="tablist">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              className={`inkwell-modal-tab ${activeTab === tab.id ? 'inkwell-modal-tab-active' : ''}`}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="inkwell-modal-body" role="tabpanel">
+          {activeTab === 'appearance' && <AppearanceTab />}
+          {activeTab === 'editor' && <EditorTab />}
+          {activeTab === 'ai' && <AITab />}
+          {activeTab === 'data' && <DataTab />}
+          {activeTab === 'about' && <AboutTab />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Appearance Tab ──
+
+function AppearanceTab() {
+  const {
+    theme, setTheme,
+    editorFontFamily, setEditorFontFamily,
+    editorFontSize, setEditorFontSize,
+    editorWidth, setEditorWidth,
+  } = useSettingsStore();
+
+  return (
+    <>
+      <div className="inkwell-settings-section">
+        <div className="inkwell-settings-section-title">Theme</div>
+        <div className="inkwell-setting-row">
+          <div>
+            <div className="inkwell-setting-label">Color theme</div>
+            <div className="inkwell-setting-desc">Choose light, dark, or match your system</div>
+          </div>
+          <div className="inkwell-theme-group">
+            {(['light', 'system', 'dark'] as ThemeMode[]).map((mode) => (
+              <button
+                key={mode}
+                className={`inkwell-theme-option ${theme === mode ? 'inkwell-theme-option-active' : ''}`}
+                onClick={() => setTheme(mode)}
+              >
+                {mode.charAt(0).toUpperCase() + mode.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="inkwell-settings-section">
+        <div className="inkwell-settings-section-title">Editor</div>
+
+        <div className="inkwell-setting-row">
+          <div className="inkwell-setting-label">Font family</div>
+          <select
+            className="inkwell-setting-select"
+            value={editorFontFamily}
+            onChange={(e) => setEditorFontFamily(e.target.value as EditorFontFamily)}
+          >
+            <option value="system">System Default</option>
+            <option value="serif">Serif</option>
+            <option value="sans-serif">Sans-serif</option>
+            <option value="mono">Monospace</option>
+          </select>
+        </div>
+
+        <div className="inkwell-setting-row">
+          <div className="inkwell-setting-label">Font size</div>
+          <select
+            className="inkwell-setting-select"
+            value={editorFontSize}
+            onChange={(e) => setEditorFontSize(e.target.value as EditorFontSize)}
+          >
+            <option value="small">Small (14px)</option>
+            <option value="default">Default (18px)</option>
+            <option value="large">Large (20px)</option>
+            <option value="xl">Extra Large (24px)</option>
+          </select>
+        </div>
+
+        <div className="inkwell-setting-row">
+          <div className="inkwell-setting-label">Content width</div>
+          <select
+            className="inkwell-setting-select"
+            value={editorWidth}
+            onChange={(e) => setEditorWidth(e.target.value as EditorWidth)}
+          >
+            <option value="narrow">Narrow (640px)</option>
+            <option value="default">Default (896px)</option>
+            <option value="wide">Wide (1152px)</option>
+            <option value="full">Full width</option>
+          </select>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Editor Tab ──
+
+function EditorTab() {
+  const {
+    autoSaveEnabled, setAutoSaveEnabled,
+    autoSaveIntervalMs, setAutoSaveIntervalMs,
+    spellCheck, setSpellCheck,
+    showWordCount, setShowWordCount,
+    showCharCount, setShowCharCount,
+  } = useSettingsStore();
+
+  return (
+    <>
+      <div className="inkwell-settings-section">
+        <div className="inkwell-settings-section-title">Auto-save</div>
+
+        <div className="inkwell-setting-row">
+          <div>
+            <div className="inkwell-setting-label">Auto-save documents</div>
+            <div className="inkwell-setting-desc">Automatically save changes at regular intervals</div>
+          </div>
+          <button
+            className={`inkwell-toggle ${autoSaveEnabled ? 'inkwell-toggle-active' : ''}`}
+            onClick={() => setAutoSaveEnabled(!autoSaveEnabled)}
+            role="switch"
+            aria-checked={autoSaveEnabled}
+            aria-label="Auto-save"
+          />
+        </div>
+
+        {autoSaveEnabled && (
+          <div className="inkwell-setting-row">
+            <div className="inkwell-setting-label">Save interval</div>
+            <select
+              className="inkwell-setting-select"
+              value={autoSaveIntervalMs}
+              onChange={(e) => setAutoSaveIntervalMs(Number(e.target.value) as AutoSaveInterval)}
+            >
+              <option value={10_000}>10 seconds</option>
+              <option value={30_000}>30 seconds</option>
+              <option value={60_000}>1 minute</option>
+              <option value={120_000}>2 minutes</option>
+              <option value={300_000}>5 minutes</option>
+            </select>
+          </div>
+        )}
+      </div>
+
+      <div className="inkwell-settings-section">
+        <div className="inkwell-settings-section-title">Display</div>
+
+        <div className="inkwell-setting-row">
+          <div className="inkwell-setting-label">Spell check</div>
+          <button
+            className={`inkwell-toggle ${spellCheck ? 'inkwell-toggle-active' : ''}`}
+            onClick={() => setSpellCheck(!spellCheck)}
+            role="switch"
+            aria-checked={spellCheck}
+            aria-label="Spell check"
+          />
+        </div>
+
+        <div className="inkwell-setting-row">
+          <div className="inkwell-setting-label">Show word count</div>
+          <button
+            className={`inkwell-toggle ${showWordCount ? 'inkwell-toggle-active' : ''}`}
+            onClick={() => setShowWordCount(!showWordCount)}
+            role="switch"
+            aria-checked={showWordCount}
+            aria-label="Show word count"
+          />
+        </div>
+
+        <div className="inkwell-setting-row">
+          <div className="inkwell-setting-label">Show character count</div>
+          <button
+            className={`inkwell-toggle ${showCharCount ? 'inkwell-toggle-active' : ''}`}
+            onClick={() => setShowCharCount(!showCharCount)}
+            role="switch"
+            aria-checked={showCharCount}
+            aria-label="Show character count"
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── AI Tab ──
+
+function AITab() {
+  const {
+    claudeApiKey, setClaudeApiKey,
+    routingMode, setRoutingMode,
+    ghostTextEnabled, setGhostTextEnabled,
+    ghostTextDebounceMs, setGhostTextDebounceMs,
+  } = useSettingsStore();
+
+  const [localKey, setLocalKey] = useState(claudeApiKey);
+  const [showKey, setShowKey] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const keyChanged = localKey !== claudeApiKey;
+
+  const handleSaveKey = useCallback(() => {
+    setClaudeApiKey(localKey);
+    // Re-initialize the AI service with the new key
+    destroyDocumentAI();
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }, [localKey, setClaudeApiKey]);
+
+  return (
+    <>
+      <div className="inkwell-settings-section">
+        <div className="inkwell-settings-section-title">API Configuration</div>
+
+        <div style={{ marginBottom: '0.75rem' }}>
+          <div className="inkwell-setting-label" style={{ marginBottom: '0.375rem' }}>Claude API Key</div>
+          <div className="inkwell-setting-desc" style={{ marginBottom: '0.5rem' }}>
+            Overrides the NEXT_PUBLIC_CLAUDE_API_KEY environment variable
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input
+              type={showKey ? 'text' : 'password'}
+              className="inkwell-setting-input"
+              value={localKey}
+              onChange={(e) => setLocalKey(e.target.value)}
+              placeholder="sk-ant-..."
+              aria-label="Claude API key"
+            />
+            <button
+              className="inkwell-btn-secondary"
+              onClick={() => setShowKey(!showKey)}
+              style={{ whiteSpace: 'nowrap', padding: '0.375rem 0.625rem' }}
+            >
+              {showKey ? 'Hide' : 'Show'}
+            </button>
+            <button
+              className="inkwell-btn-primary"
+              onClick={handleSaveKey}
+              disabled={!keyChanged}
+              style={{ whiteSpace: 'nowrap' }}
+            >
+              {saved ? 'Saved' : 'Save'}
+            </button>
+          </div>
+        </div>
+
+        <div className="inkwell-setting-row">
+          <div>
+            <div className="inkwell-setting-label">Routing mode</div>
+            <div className="inkwell-setting-desc">How AI operations are routed between local and cloud models</div>
+          </div>
+          <select
+            className="inkwell-setting-select"
+            value={routingMode}
+            onChange={(e) => setRoutingMode(e.target.value as RoutingModeOption)}
+          >
+            <option value="auto">Auto</option>
+            <option value="local_only">Local Only</option>
+            <option value="cloud_only">Cloud Only</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="inkwell-settings-section">
+        <div className="inkwell-settings-section-title">Inline Suggestions</div>
+
+        <div className="inkwell-setting-row">
+          <div>
+            <div className="inkwell-setting-label">Ghost text suggestions</div>
+            <div className="inkwell-setting-desc">Show AI-powered inline completions as you type</div>
+          </div>
+          <button
+            className={`inkwell-toggle ${ghostTextEnabled ? 'inkwell-toggle-active' : ''}`}
+            onClick={() => setGhostTextEnabled(!ghostTextEnabled)}
+            role="switch"
+            aria-checked={ghostTextEnabled}
+            aria-label="Ghost text suggestions"
+          />
+        </div>
+
+        {ghostTextEnabled && (
+          <div className="inkwell-setting-row">
+            <div className="inkwell-setting-label">Suggestion delay</div>
+            <select
+              className="inkwell-setting-select"
+              value={ghostTextDebounceMs}
+              onChange={(e) => setGhostTextDebounceMs(Number(e.target.value) as GhostTextDelay)}
+            >
+              <option value={300}>Fast (300ms)</option>
+              <option value={500}>Default (500ms)</option>
+              <option value={800}>Slow (800ms)</option>
+            </select>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ── Data Tab ──
+
+function DataTab() {
+  const { documents } = useDocumentStore();
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  const activeDocuments = documents.filter((d) => d.deletedAt === null);
+
+  const handleExportAll = useCallback(() => {
+    const parts: string[] = [];
+    for (const doc of activeDocuments) {
+      const md = editorJsonToMarkdown(doc.content);
+      parts.push(`# ${doc.title}\n\n${md}\n\n---\n`);
+    }
+    const blob = new Blob([parts.join('\n')], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'inkwell-export.md';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [activeDocuments]);
+
+  const handleClearAll = useCallback(async () => {
+    // Delete all documents from IndexedDB
+    const store = useDocumentStore.getState();
+    for (const doc of documents) {
+      await store.permanentDelete(doc.id);
+    }
+    setConfirmClear(false);
+  }, [documents]);
+
+  return (
+    <>
+      <div className="inkwell-settings-section">
+        <div className="inkwell-settings-section-title">Export</div>
+        <div className="inkwell-setting-row">
+          <div>
+            <div className="inkwell-setting-label">Export all documents</div>
+            <div className="inkwell-setting-desc">
+              Download all {activeDocuments.length} document{activeDocuments.length !== 1 ? 's' : ''} as a single Markdown file
+            </div>
+          </div>
+          <button
+            className="inkwell-btn-secondary"
+            onClick={handleExportAll}
+            disabled={activeDocuments.length === 0}
+          >
+            Export
+          </button>
+        </div>
+      </div>
+
+      <div className="inkwell-settings-section">
+        <div className="inkwell-settings-section-title">Danger Zone</div>
+        <div className="inkwell-setting-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+          <div>
+            <div className="inkwell-setting-label">Delete all documents</div>
+            <div className="inkwell-setting-desc">
+              Permanently delete all documents including trash. This cannot be undone.
+            </div>
+          </div>
+          {!confirmClear ? (
+            <button
+              className="inkwell-btn-danger"
+              onClick={() => setConfirmClear(true)}
+              disabled={documents.length === 0}
+              style={{ marginTop: '0.5rem' }}
+            >
+              Delete All Documents
+            </button>
+          ) : (
+            <div className="inkwell-confirm-dialog">
+              <span className="inkwell-confirm-text">Are you sure?</span>
+              <button className="inkwell-btn-danger" onClick={handleClearAll}>
+                Yes, delete all
+              </button>
+              <button className="inkwell-btn-secondary" onClick={() => setConfirmClear(false)}>
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── About Tab ──
+
+function AboutTab() {
+  const { resetAll } = useSettingsStore();
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  return (
+    <>
+      <div className="inkwell-settings-section">
+        <div className="inkwell-settings-section-title">Application</div>
+        <div className="inkwell-setting-row">
+          <div className="inkwell-setting-label">Inkwell</div>
+          <span style={{ fontSize: '0.8125rem', color: '#6b7280' }}>v0.0.1</span>
+        </div>
+        <div className="inkwell-setting-row">
+          <div className="inkwell-setting-label">Built with</div>
+          <span style={{ fontSize: '0.8125rem', color: '#6b7280' }}>Next.js, TipTap, Claude</span>
+        </div>
+      </div>
+
+      <div className="inkwell-settings-section">
+        <div className="inkwell-settings-section-title">Keyboard Shortcuts</div>
+        <table className="inkwell-shortcuts-table">
+          <tbody>
+            <tr>
+              <td>Toggle sidebar</td>
+              <td><kbd className="inkwell-kbd">Ctrl</kbd> + <kbd className="inkwell-kbd">\</kbd></td>
+            </tr>
+            <tr>
+              <td>Bold</td>
+              <td><kbd className="inkwell-kbd">Ctrl</kbd> + <kbd className="inkwell-kbd">B</kbd></td>
+            </tr>
+            <tr>
+              <td>Italic</td>
+              <td><kbd className="inkwell-kbd">Ctrl</kbd> + <kbd className="inkwell-kbd">I</kbd></td>
+            </tr>
+            <tr>
+              <td>Underline</td>
+              <td><kbd className="inkwell-kbd">Ctrl</kbd> + <kbd className="inkwell-kbd">U</kbd></td>
+            </tr>
+            <tr>
+              <td>Accept ghost text</td>
+              <td><kbd className="inkwell-kbd">Tab</kbd></td>
+            </tr>
+            <tr>
+              <td>Slash commands</td>
+              <td><kbd className="inkwell-kbd">/</kbd></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div className="inkwell-settings-section">
+        <div className="inkwell-settings-section-title">Reset</div>
+        <div className="inkwell-setting-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+          <div>
+            <div className="inkwell-setting-label">Reset all settings</div>
+            <div className="inkwell-setting-desc">Restore all settings to their default values</div>
+          </div>
+          {!confirmReset ? (
+            <button
+              className="inkwell-btn-secondary"
+              onClick={() => setConfirmReset(true)}
+              style={{ marginTop: '0.5rem' }}
+            >
+              Reset to Defaults
+            </button>
+          ) : (
+            <div className="inkwell-confirm-dialog">
+              <span className="inkwell-confirm-text">Reset all settings?</span>
+              <button
+                className="inkwell-btn-danger"
+                onClick={() => {
+                  resetAll();
+                  setConfirmReset(false);
+                }}
+              >
+                Yes, reset
+              </button>
+              <button className="inkwell-btn-secondary" onClick={() => setConfirmReset(false)}>
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}

@@ -13,9 +13,9 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { Editor } from '@tiptap/core';
 import { OperationType } from '@inkwell/shared';
-import { DEBOUNCE_MS } from '@inkwell/shared';
 import { GhostTextPluginKey, shouldUpdateGhostText } from '@inkwell/editor';
 import { getDocumentAI } from '../lib/document-ai-instance';
+import { useSettingsStore } from '../lib/settings-store';
 
 interface UseGhostTextOptions {
   editor: Editor | null;
@@ -29,6 +29,7 @@ export function useGhostText({ editor, enabled = true }: UseGhostTextOptions) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const suggestionRef = useRef<{ text: string; pos: number } | null>(null);
+  const ghostTextDebounceMs = useSettingsStore((s) => s.ghostTextDebounceMs);
 
   useEffect(() => {
     if (!editor || !enabled) return;
@@ -83,7 +84,7 @@ export function useGhostText({ editor, enabled = true }: UseGhostTextOptions) {
         } catch {
           // Silently ignore — ghost text is best-effort
         }
-      }, DEBOUNCE_MS);
+      }, ghostTextDebounceMs);
     };
 
     editor.on('update', handleUpdate);
@@ -97,7 +98,7 @@ export function useGhostText({ editor, enabled = true }: UseGhostTextOptions) {
         abortRef.current.abort();
       }
     };
-  }, [editor, enabled]);
+  }, [editor, enabled, ghostTextDebounceMs]);
 
   const accept = useCallback(() => {
     if (!editor) return;

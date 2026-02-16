@@ -21,11 +21,13 @@ import { BackpressureIndicator } from '@/components/BackpressureIndicator';
 import { EditorArea } from '@/components/EditorArea';
 import { StatusBar } from '@/components/StatusBar';
 import { SetupScreen } from '@/components/SetupScreen';
+import { SettingsModal } from '@/components/SettingsModal';
 import { useDocumentAI } from '@/hooks/useDocumentAI';
 import { useGhostText } from '@/hooks/useGhostText';
 import { useVoicePipeline } from '@/hooks/useVoicePipeline';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useDocumentStore } from '@/lib/document-store';
+import { useSettingsStore, FONT_FAMILY_MAP, FONT_SIZE_MAP, EDITOR_WIDTH_MAP } from '@/lib/settings-store';
 import { deriveTitleFromContent } from '@/lib/document-utils';
 import { isTauriEnvironment, checkModelsStatus } from '@/lib/tauri-bridge';
 
@@ -48,7 +50,15 @@ export default function Home() {
   const [hasDiffActive, setHasDiffActive] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
   const [setupChecked, setSetupChecked] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { title, setTitle, toggleSidebar } = useDocumentStore();
+  const {
+    editorFontFamily,
+    editorFontSize,
+    editorWidth,
+    spellCheck,
+    ghostTextEnabled,
+  } = useSettingsStore();
 
   // Check if we need to show the setup screen (Tauri only, first run)
   useEffect(() => {
@@ -98,6 +108,7 @@ export default function Home() {
         role: 'textbox',
         'aria-label': 'Document editor',
         'aria-multiline': 'true',
+        spellcheck: spellCheck ? 'true' : 'false',
       },
     },
   });
@@ -114,9 +125,25 @@ export default function Home() {
     rejectDiff,
   } = useDocumentAI({ editor });
 
-  useGhostText({ editor, enabled: isReady });
+  useGhostText({ editor, enabled: isReady && ghostTextEnabled });
   const voicePipeline = useVoicePipeline({ editor });
   useAutoSave({ editor });
+
+  // Update spellcheck attribute when setting changes
+  useEffect(() => {
+    if (!editor) return;
+    editor.setOptions({
+      editorProps: {
+        attributes: {
+          class: 'min-h-[60vh] outline-none prose prose-lg max-w-none',
+          role: 'textbox',
+          'aria-label': 'Document editor',
+          'aria-multiline': 'true',
+          spellcheck: spellCheck ? 'true' : 'false',
+        },
+      },
+    });
+  }, [editor, spellCheck]);
 
   const handleSlashCommand = useCallback(
     (operation: OperationType, args?: string) => {
@@ -204,6 +231,7 @@ export default function Home() {
         onAIOperation={handleAIOperation}
         voicePipeline={voicePipeline}
         isLocalMode={isLocalMode}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
       <BackpressureIndicator
         isPaused={isPaused}
@@ -213,9 +241,16 @@ export default function Home() {
         onRetry={retryLastOperation}
       />
       <div className="flex flex-1 min-h-0">
-        <Sidebar editor={editor} />
+        <Sidebar editor={editor} onOpenSettings={() => setSettingsOpen(true)} />
         <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex-1 max-w-4xl mx-auto w-full p-4 md:p-8">
+          <div
+            className="flex-1 mx-auto w-full p-4 md:p-8"
+            style={{
+              maxWidth: EDITOR_WIDTH_MAP[editorWidth],
+              fontFamily: FONT_FAMILY_MAP[editorFontFamily],
+              fontSize: FONT_SIZE_MAP[editorFontSize],
+            }}
+          >
             <EditorArea
               editor={editor}
               hasDiffActive={hasDiffActive}
@@ -226,6 +261,7 @@ export default function Home() {
           <StatusBar editor={editor} />
         </div>
       </div>
+      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </main>
   );
 }

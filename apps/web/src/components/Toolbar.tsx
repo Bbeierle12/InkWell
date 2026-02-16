@@ -22,9 +22,10 @@ interface ToolbarProps {
   onAIOperation: (operation: OperationType) => void;
   voicePipeline: UseVoicePipelineReturn;
   isLocalMode: boolean;
+  onOpenSettings?: () => void;
 }
 
-export function Toolbar({ editor, onAIOperation, voicePipeline, isLocalMode }: ToolbarProps) {
+export function Toolbar({ editor, onAIOperation, voicePipeline, isLocalMode, onOpenSettings }: ToolbarProps) {
   const [, setTick] = useState(0);
   const [aiDropdownOpen, setAiDropdownOpen] = useState(false);
   const { toggleSidebar, sidebarOpen } = useDocumentStore();
@@ -255,6 +256,22 @@ export function Toolbar({ editor, onAIOperation, voicePipeline, isLocalMode }: T
 
       {/* Right-aligned section */}
       <div className="flex-1" />
+
+      {/* Settings */}
+      {onOpenSettings && (
+        <button
+          type="button"
+          className="inkwell-toolbar-btn"
+          onClick={onOpenSettings}
+          aria-label="Settings"
+          title="Settings"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="8" cy="8" r="2.5" />
+            <path d="M13.5 8a5.5 5.5 0 0 0-.1-.9l1.4-1.1a.3.3 0 0 0 .1-.4l-1.3-2.2a.3.3 0 0 0-.4-.1l-1.6.6a5 5 0 0 0-.8-.5L10.5 1.6a.3.3 0 0 0-.3-.3H7.8a.3.3 0 0 0-.3.3l-.3 1.8a5 5 0 0 0-.8.5l-1.6-.6a.3.3 0 0 0-.4.1L3.1 5.6a.3.3 0 0 0 .1.4l1.4 1.1a5.5 5.5 0 0 0 0 1.8l-1.4 1.1a.3.3 0 0 0-.1.4l1.3 2.2a.3.3 0 0 0 .4.1l1.6-.6c.3.2.5.4.8.5l.3 1.8a.3.3 0 0 0 .3.3h2.4a.3.3 0 0 0 .3-.3l.3-1.8c.3-.1.6-.3.8-.5l1.6.6a.3.3 0 0 0 .4-.1l1.3-2.2a.3.3 0 0 0-.1-.4l-1.4-1.1a5.5 5.5 0 0 0 .1-.9z" />
+          </svg>
+        </button>
+      )}
 
       {/* Mode indicator */}
       <span

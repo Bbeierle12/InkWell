@@ -18,9 +18,10 @@ import { useDocumentStore, getFilteredDocuments } from '@/lib/document-store';
 
 interface SidebarProps {
   editor: Editor | null;
+  onOpenSettings?: () => void;
 }
 
-export function Sidebar({ editor }: SidebarProps) {
+export function Sidebar({ editor, onOpenSettings }: SidebarProps) {
   const store = useDocumentStore();
   const { sidebarOpen, documentId, refreshDocuments, load, softDelete, restore, permanentDelete, newDocument, showTrash } = store;
   const filteredDocuments = getFilteredDocuments(store);
@@ -103,6 +104,15 @@ export function Sidebar({ editor }: SidebarProps) {
 
       <div className="inkwell-sidebar-footer">
         <TrashToggle />
+        {onOpenSettings && (
+          <button
+            type="button"
+            className="inkwell-sidebar-settings-btn"
+            onClick={onOpenSettings}
+          >
+            Settings
+          </button>
+        )}
       </div>
     </aside>
   );

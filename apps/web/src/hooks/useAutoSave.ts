@@ -10,15 +10,15 @@
 import { useEffect, useRef } from 'react';
 import type { Editor } from '@tiptap/core';
 import { useDocumentStore } from '../lib/document-store';
+import { useSettingsStore } from '../lib/settings-store';
 
 interface UseAutoSaveOptions {
   editor: Editor | null;
-  intervalMs?: number;
 }
 
-export function useAutoSave({ editor, intervalMs }: UseAutoSaveOptions) {
-  const { isDirty, markDirty, save, autoSaveIntervalMs } = useDocumentStore();
-  const interval = intervalMs ?? autoSaveIntervalMs;
+export function useAutoSave({ editor }: UseAutoSaveOptions) {
+  const { isDirty, markDirty, save } = useDocumentStore();
+  const { autoSaveEnabled, autoSaveIntervalMs } = useSettingsStore();
   const editorRef = useRef(editor);
   editorRef.current = editor;
 
@@ -35,15 +35,17 @@ export function useAutoSave({ editor, intervalMs }: UseAutoSaveOptions) {
 
   // Auto-save interval
   useEffect(() => {
+    if (!autoSaveEnabled) return;
+
     const timer = setInterval(() => {
       const currentEditor = editorRef.current;
       if (currentEditor && useDocumentStore.getState().isDirty) {
         save(currentEditor);
       }
-    }, interval);
+    }, autoSaveIntervalMs);
 
     return () => clearInterval(timer);
-  }, [interval, save]);
+  }, [autoSaveEnabled, autoSaveIntervalMs, save]);
 
   return { isDirty };
 }

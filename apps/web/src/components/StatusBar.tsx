@@ -12,6 +12,7 @@
 import { useState, useEffect } from 'react';
 import type { Editor } from '@tiptap/core';
 import { useDocumentStore } from '@/lib/document-store';
+import { useSettingsStore } from '@/lib/settings-store';
 import { countWords } from '@/lib/document-utils';
 
 interface StatusBarProps {
@@ -20,6 +21,7 @@ interface StatusBarProps {
 
 export function StatusBar({ editor }: StatusBarProps) {
   const { isDirty, lastSavedAt } = useDocumentStore();
+  const { showWordCount, showCharCount } = useSettingsStore();
   const [wordCount, setWordCount] = useState(0);
   const [charCount, setCharCount] = useState(0);
 
@@ -56,12 +58,16 @@ export function StatusBar({ editor }: StatusBarProps) {
         </span>
       )}
       <div className="inkwell-status-spacer" />
-      <span className="inkwell-status-count" aria-label={`${wordCount} words`}>
-        {wordCount} {wordCount === 1 ? 'word' : 'words'}
-      </span>
-      <span className="inkwell-status-count" aria-label={`${charCount} characters`}>
-        {charCount} {charCount === 1 ? 'char' : 'chars'}
-      </span>
+      {showWordCount && (
+        <span className="inkwell-status-count" aria-label={`${wordCount} words`}>
+          {wordCount} {wordCount === 1 ? 'word' : 'words'}
+        </span>
+      )}
+      {showCharCount && (
+        <span className="inkwell-status-count" aria-label={`${charCount} characters`}>
+          {charCount} {charCount === 1 ? 'char' : 'chars'}
+        </span>
+      )}
     </footer>
   );
 }

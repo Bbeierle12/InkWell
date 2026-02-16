@@ -12,6 +12,7 @@ import {
   invokeLocalInference,
   streamLocalInference,
 } from './tauri-bridge';
+import { useSettingsStore } from './settings-store';
 
 let instance: DocumentAIServiceImpl | null = null;
 
@@ -47,16 +48,18 @@ function createTauriLocalProvider(): LocalInferenceProvider | undefined {
 /**
  * Get the singleton DocumentAI service instance.
  *
- * Reads the API key from NEXT_PUBLIC_CLAUDE_API_KEY environment variable.
- * Throws a helpful error if the key is not set.
+ * Reads the API key from settings store first, then falls back to
+ * the NEXT_PUBLIC_CLAUDE_API_KEY environment variable.
+ * Throws a helpful error if neither is set.
  */
 export function getDocumentAI(): DocumentAIServiceImpl {
   if (!instance) {
-    const apiKey = process.env.NEXT_PUBLIC_CLAUDE_API_KEY;
+    const settingsKey = useSettingsStore.getState().claudeApiKey;
+    const apiKey = settingsKey || process.env.NEXT_PUBLIC_CLAUDE_API_KEY;
     if (!apiKey) {
       throw new Error(
-        'NEXT_PUBLIC_CLAUDE_API_KEY is not set. ' +
-        'Create a .env.local file in apps/web/ with:\n' +
+        'Claude API key is not configured. ' +
+        'Set it in Settings > AI, or create a .env.local file in apps/web/ with:\n' +
         'NEXT_PUBLIC_CLAUDE_API_KEY=sk-ant-...',
       );
     }

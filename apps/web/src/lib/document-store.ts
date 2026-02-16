@@ -38,7 +38,6 @@ interface DocumentStoreState {
   title: string;
   isDirty: boolean;
   lastSavedAt: number | null;
-  autoSaveIntervalMs: number;
   documents: StoredDocument[];
   sidebarOpen: boolean;
   sortMode: SortMode;
@@ -215,7 +214,6 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
   title: 'Untitled',
   isDirty: false,
   lastSavedAt: null,
-  autoSaveIntervalMs: 30_000,
   documents: [],
   sidebarOpen: true,
   sortMode: 'updated' as SortMode,
