@@ -41,6 +41,7 @@ base64 = "0.22"
 rand = "0.8"
 sha2 = "0.10"
 webbrowser = "1"
+dotenvy = "0.15"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

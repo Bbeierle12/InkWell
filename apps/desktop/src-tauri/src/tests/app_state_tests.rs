@@ -51,6 +51,7 @@ mod tests {
             llm: Arc::new(LlamaEngine::new(Box::new(MockLlmBackend::new()))),
             stt: Arc::new(WhisperEngine::new(Box::new(MockSttBackend::new()))),
             pending_file: Arc::new(Mutex::new(None)),
+            auth_pkce: Arc::new(Mutex::new(None)),
         };
 
         let f = temp_gguf_file();
@@ -76,6 +77,7 @@ mod tests {
             llm: Arc::new(LlamaEngine::new(Box::new(MockLlmBackend::new()))),
             stt: Arc::new(WhisperEngine::new(Box::new(MockSttBackend::new()))),
             pending_file: Arc::new(Mutex::new(None)),
+            auth_pkce: Arc::new(Mutex::new(None)),
         };
 
         let f = temp_bin_file();
@@ -96,6 +98,7 @@ mod tests {
             llm: Arc::new(LlamaEngine::new(Box::new(StubLlmBackend))),
             stt: Arc::new(WhisperEngine::new(Box::new(StubSttBackend))),
             pending_file: Arc::new(Mutex::new(None)),
+            auth_pkce: Arc::new(Mutex::new(None)),
         };
 
         // Stub LLM: load returns error about feature flag
@@ -126,6 +129,7 @@ mod tests {
             llm: Arc::new(LlamaEngine::new(Box::new(MockLlmBackend::new()))),
             stt: Arc::new(WhisperEngine::new(Box::new(MockSttBackend::new()))),
             pending_file: Arc::new(Mutex::new(None)),
+            auth_pkce: Arc::new(Mutex::new(None)),
         });
 
         let f = temp_gguf_file();
@@ -167,6 +171,7 @@ mod tests {
             llm: Arc::new(LlamaEngine::new(Box::new(MockLlmBackend::new()))),
             stt: Arc::new(WhisperEngine::new(Box::new(MockSttBackend::new()))),
             pending_file: Arc::new(Mutex::new(None)),
+            auth_pkce: Arc::new(Mutex::new(None)),
         };
 
         let f = temp_gguf_file();

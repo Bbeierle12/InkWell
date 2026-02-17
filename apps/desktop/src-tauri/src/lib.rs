@@ -9,6 +9,7 @@ pub mod bridge;
 mod tests;
 
 use std::sync::{Arc, Mutex};
+use std::path::{Path, PathBuf};
 use inference::llama::LlamaEngine;
 use inference::whisper::WhisperEngine;
 
@@ -61,6 +62,66 @@ pub fn is_auth_callback_url(url_str: &str) -> bool {
         && parsed.path() == "/callback"
 }
 
+fn load_optional_env_file(path: &Path) {
+    if !path.is_file() {
+        return;
+    }
+    let _ = dotenvy::from_path(path);
+}
+
+fn push_unique_path(paths: &mut Vec<PathBuf>, candidate: PathBuf) {
+    if !paths.iter().any(|path| path == &candidate) {
+        paths.push(candidate);
+    }
+}
+
+fn desktop_oauth_env_candidates() -> Vec<PathBuf> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    if let Ok(cwd) = std::env::current_dir() {
+        push_unique_path(&mut candidates, cwd.join("claude-oauth.env"));
+        push_unique_path(
+            &mut candidates,
+            cwd.join("src-tauri").join("claude-oauth.env"),
+        );
+        push_unique_path(
+            &mut candidates,
+            cwd.join("apps")
+                .join("desktop")
+                .join("src-tauri")
+                .join("claude-oauth.env"),
+        );
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            push_unique_path(&mut candidates, dir.join("claude-oauth.env"));
+        }
+    }
+
+    // Checked-in file is fallback default; local files above can override it.
+    push_unique_path(
+        &mut candidates,
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("claude-oauth.env"),
+    );
+
+    candidates
+}
+
+/// Load desktop OAuth config from repository-local env files.
+///
+/// Checked-in path:
+/// - `apps/desktop/src-tauri/claude-oauth.env`
+///
+/// Also supports runtime-local overrides if present:
+/// - `claude-oauth.env` in current working directory
+/// - `claude-oauth.env` next to the executable
+pub fn load_desktop_oauth_env() {
+    for path in desktop_oauth_env_candidates() {
+        load_optional_env_file(&path);
+    }
+}
+
 /// Create the default `AppState` with appropriate backends.
 ///
 /// With `local-inference` feature: uses real llama.cpp/whisper.cpp backends.
@@ -111,6 +172,7 @@ mod app {
 
     /// Run the Tauri application.
     pub fn run() {
+        load_desktop_oauth_env();
         let state = create_app_state();
         let pending_file = state.pending_file.clone();
 
@@ -274,5 +336,12 @@ mod lib_tests {
     #[test]
     fn test_is_auth_callback_url_invalid_host() {
         assert!(!is_auth_callback_url("inkwell://open/callback?code=abc"));
+    }
+
+    #[test]
+    fn test_desktop_oauth_env_candidates_include_manifest_path() {
+        let expected = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("claude-oauth.env");
+        let candidates = desktop_oauth_env_candidates();
+        assert!(candidates.iter().any(|path| path == &expected));
     }
 }
