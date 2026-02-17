@@ -29,13 +29,13 @@ export type ResolvedClaudeAuth =
   | ResolvedClaudeApiKey;
 
 /**
- * Feasibility-gated capability flag. Subscription sign-in remains disabled
- * until vendor support for external app flows is confirmed.
+ * Claude account/subscription sign-in toggle.
+ * API-key auth is the active production path.
  */
-export const CLAUDE_SUBSCRIPTION_SIGNIN_SUPPORTED = true;
+export const CLAUDE_SUBSCRIPTION_SIGNIN_SUPPORTED = false;
 
 export const CLAUDE_SUBSCRIPTION_SIGNIN_UNSUPPORTED_REASON =
-  'Claude account/subscription sign-in is not available in this app yet.';
+  'This app is configured for Claude API key authentication.';
 
 /**
  * Resolve a Claude API key, preferring user settings over environment.

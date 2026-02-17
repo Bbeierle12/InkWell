@@ -102,7 +102,7 @@ const FONT_FAMILY_VALUES: EditorFontFamily[] = ['system', 'serif', 'sans-serif',
 const FONT_SIZE_VALUES: EditorFontSize[] = ['small', 'default', 'large', 'xl'];
 const EDITOR_WIDTH_VALUES: EditorWidth[] = ['narrow', 'default', 'wide', 'full'];
 const AUTO_SAVE_INTERVAL_VALUES: AutoSaveInterval[] = [10_000, 30_000, 60_000, 120_000, 300_000];
-const AI_AUTH_METHOD_VALUES: AIAuthMethod[] = ['api_key', 'claude_subscription'];
+const AI_AUTH_METHOD_VALUES: AIAuthMethod[] = ['api_key'];
 const GHOST_TEXT_DELAY_VALUES: GhostTextDelay[] = [300, 500, 800];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -207,7 +207,9 @@ export const useSettingsStore = create<SettingsState>()(
       setSpellCheck: (spellCheck) => set({ spellCheck }),
       setShowWordCount: (showWordCount) => set({ showWordCount }),
       setShowCharCount: (showCharCount) => set({ showCharCount }),
-      setAiAuthMethod: (aiAuthMethod) => set({ aiAuthMethod }),
+      setAiAuthMethod: (aiAuthMethod) => set({
+        aiAuthMethod: aiAuthMethod === 'api_key' ? 'api_key' : DEFAULTS.aiAuthMethod,
+      }),
       setClaudeApiKey: (claudeApiKey) => set({ claudeApiKey }),
       setGhostTextEnabled: (ghostTextEnabled) => set({ ghostTextEnabled }),
       setGhostTextDebounceMs: (ghostTextDebounceMs) => set({ ghostTextDebounceMs }),

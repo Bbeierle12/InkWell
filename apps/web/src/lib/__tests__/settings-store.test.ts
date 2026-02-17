@@ -13,7 +13,7 @@ describe('sanitizePersistedSettings', () => {
       spellCheck: false,
       showWordCount: false,
       showCharCount: true,
-      aiAuthMethod: 'claude_subscription',
+      aiAuthMethod: 'api_key',
       ghostTextEnabled: true,
       ghostTextDebounceMs: 800,
     });
@@ -28,7 +28,7 @@ describe('sanitizePersistedSettings', () => {
       spellCheck: false,
       showWordCount: false,
       showCharCount: true,
-      aiAuthMethod: 'claude_subscription',
+      aiAuthMethod: 'api_key',
       ghostTextEnabled: true,
       ghostTextDebounceMs: 800,
     });

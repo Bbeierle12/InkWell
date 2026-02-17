@@ -20,7 +20,6 @@ import type {
   EditorFontFamily,
   EditorFontSize,
   EditorWidth,
-  AIAuthMethod,
   GhostTextDelay,
   AutoSaveInterval,
 } from '@/lib/settings-store';
@@ -28,18 +27,7 @@ import { useDocumentStore } from '@/lib/document-store';
 import { editorJsonToMarkdown } from '@/lib/markdown-export';
 import { destroyDocumentAI } from '@/lib/document-ai-instance';
 import { saveClaudeApiKeyToSecureStorage } from '@/lib/claude-key-storage';
-import {
-  completeClaudeSubscriptionSignIn,
-  getClaudeAuthStatus,
-  isTauriEnvironment,
-  onClaudeAuthCallback,
-  signOutClaudeSubscription,
-  startClaudeSubscriptionSignIn,
-} from '@/lib/tauri-bridge';
-import {
-  CLAUDE_SUBSCRIPTION_SIGNIN_SUPPORTED,
-  sanitizeAuthErrorMessage,
-} from '@/lib/ai-auth';
+import { isTauriEnvironment } from '@/lib/tauri-bridge';
 
 type TabId = 'appearance' | 'editor' | 'ai' | 'data' | 'about';
 
@@ -305,13 +293,9 @@ function EditorTab() {
 // ── AI Tab ──
 
 function AITab() {
-  const aiAuthMethod = useSettingsStore((s) => s.aiAuthMethod);
   const setAiAuthMethod = useSettingsStore((s) => s.setAiAuthMethod);
   const claudeApiKey = useSettingsStore((s) => (typeof s.claudeApiKey === 'string' ? s.claudeApiKey : ''));
   const setClaudeApiKey = useSettingsStore((s) => s.setClaudeApiKey);
-  const claudeSubscriptionSupported = useSettingsStore((s) => s.claudeSubscriptionSupported);
-  const claudeSubscriptionConnected = useSettingsStore((s) => s.claudeSubscriptionConnected);
-  const setClaudeSubscriptionStatus = useSettingsStore((s) => s.setClaudeSubscriptionStatus);
   const ghostTextEnabled = useSettingsStore((s) => Boolean(s.ghostTextEnabled));
   const setGhostTextEnabled = useSettingsStore((s) => s.setGhostTextEnabled);
   const ghostTextDebounceMs = useSettingsStore((s) =>
@@ -326,20 +310,16 @@ function AITab() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [authBusy, setAuthBusy] = useState(false);
-  const [authMessage, setAuthMessage] = useState<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const keyChanged = localKey !== claudeApiKey;
-
-  const authStateLabel = !claudeSubscriptionSupported
-    ? 'Unsupported'
-    : claudeSubscriptionConnected
-      ? 'Connected'
-      : 'Disconnected';
 
   useEffect(() => {
     setLocalKey(claudeApiKey);
   }, [claudeApiKey]);
+
+  useEffect(() => {
+    setAiAuthMethod('api_key');
+  }, [setAiAuthMethod]);
 
   useEffect(() => {
     return () => {
@@ -348,55 +328,6 @@ function AITab() {
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!isTauriEnvironment()) return;
-    let mounted = true;
-    let unlisten: (() => void) | null = null;
-
-    async function syncAuthStatus() {
-      const status = await getClaudeAuthStatus();
-      if (!mounted || !status) return;
-      setClaudeSubscriptionStatus({
-        supported: status.supported && CLAUDE_SUBSCRIPTION_SIGNIN_SUPPORTED,
-        connected: status.connected,
-      });
-      if (status.message) {
-        setAuthMessage(sanitizeAuthErrorMessage(status.message));
-      }
-    }
-
-    void syncAuthStatus();
-
-    void onClaudeAuthCallback(async (callbackUrl) => {
-      setAuthBusy(true);
-      try {
-        const status = await completeClaudeSubscriptionSignIn(callbackUrl);
-        if (!status) {
-          setAuthMessage('Claude sign-in callback could not be completed.');
-          return;
-        }
-        setClaudeSubscriptionStatus({
-          supported: status.supported && CLAUDE_SUBSCRIPTION_SIGNIN_SUPPORTED,
-          connected: status.connected,
-        });
-        setAuthMessage(status.message ? sanitizeAuthErrorMessage(status.message) : null);
-        if (status.connected) {
-          setAiAuthMethod('claude_subscription');
-          destroyDocumentAI();
-        }
-      } finally {
-        setAuthBusy(false);
-      }
-    }).then((listener) => {
-      unlisten = listener;
-    });
-
-    return () => {
-      mounted = false;
-      if (unlisten) unlisten();
-    };
-  }, [setAiAuthMethod, setClaudeSubscriptionStatus]);
 
   const handleSaveKey = useCallback(async () => {
     const trimmed = localKey.trim();
@@ -413,6 +344,7 @@ function AITab() {
       }
 
       setClaudeApiKey(trimmed);
+      setAiAuthMethod('api_key');
       // Re-initialize the AI service with the new key
       destroyDocumentAI();
       setSaved(true);
@@ -423,44 +355,7 @@ function AITab() {
     } finally {
       setSaving(false);
     }
-  }, [localKey, setClaudeApiKey]);
-
-  const handleConnectClaude = useCallback(async () => {
-    if (!isTauriEnvironment()) return;
-    setAuthBusy(true);
-    setAuthMessage(null);
-    try {
-      const started = await startClaudeSubscriptionSignIn();
-      if (!started?.started) {
-        setAuthMessage(
-          sanitizeAuthErrorMessage(started?.message ?? 'Claude account sign-in is unavailable.'),
-        );
-      } else if (started.message) {
-        setAuthMessage(sanitizeAuthErrorMessage(started.message));
-      }
-    } finally {
-      setAuthBusy(false);
-    }
-  }, []);
-
-  const handleDisconnectClaude = useCallback(async () => {
-    setAuthBusy(true);
-    try {
-      const ok = await signOutClaudeSubscription();
-      if (!ok) {
-        setAuthMessage('Unable to disconnect Claude account.');
-        return;
-      }
-      setClaudeSubscriptionStatus({ supported: claudeSubscriptionSupported, connected: false });
-      if (aiAuthMethod === 'claude_subscription') {
-        setAiAuthMethod('api_key');
-      }
-      destroyDocumentAI();
-      setAuthMessage('Claude account disconnected.');
-    } finally {
-      setAuthBusy(false);
-    }
-  }, [aiAuthMethod, claudeSubscriptionSupported, setAiAuthMethod, setClaudeSubscriptionStatus]);
+  }, [localKey, setAiAuthMethod, setClaudeApiKey]);
 
   return (
     <>
@@ -470,25 +365,9 @@ function AITab() {
         <div className="inkwell-setting-row">
           <div>
             <div className="inkwell-setting-label">Auth method</div>
-            <div className="inkwell-setting-desc">Choose how Claude requests are authenticated.</div>
+            <div className="inkwell-setting-desc">Claude requests use API key authentication.</div>
           </div>
-          <select
-            className="inkwell-setting-select"
-            value={aiAuthMethod}
-            onChange={(e) => {
-              const method = e.target.value as AIAuthMethod;
-              setAiAuthMethod(method);
-              destroyDocumentAI();
-            }}
-          >
-            <option value="api_key">API Key</option>
-            <option
-              value="claude_subscription"
-              disabled={!claudeSubscriptionSupported || !claudeSubscriptionConnected}
-            >
-              Claude Account
-            </option>
-          </select>
+          <span className="inkwell-setting-label">API Key</span>
         </div>
 
         <div style={{ marginBottom: '0.75rem' }}>
@@ -530,41 +409,9 @@ function AITab() {
           )}
         </div>
 
-        <div className="inkwell-setting-row">
-          <div>
-            <div className="inkwell-setting-label">Claude account sign-in</div>
-            <div className="inkwell-setting-desc">
-              State: {authStateLabel}
-              {!claudeSubscriptionSupported && ' — this desktop build has sign-in disabled.'}
-            </div>
-          </div>
-          {claudeSubscriptionConnected ? (
-            <button
-              className="inkwell-btn-secondary"
-              onClick={() => {
-                void handleDisconnectClaude();
-              }}
-              disabled={authBusy}
-            >
-              Disconnect
-            </button>
-          ) : (
-            <button
-              className="inkwell-btn-secondary"
-              onClick={() => {
-                void handleConnectClaude();
-              }}
-              disabled={authBusy || !claudeSubscriptionSupported}
-            >
-              {authBusy ? 'Connecting...' : 'Connect'}
-            </button>
-          )}
+        <div className="inkwell-setting-desc">
+          Claude account sign-in is currently turned off for this build.
         </div>
-        {authMessage && (
-          <div className="inkwell-setting-desc" style={{ marginTop: '0.5rem' }}>
-            {authMessage}
-          </div>
-        )}
       </div>
 
       <div className="inkwell-settings-section">

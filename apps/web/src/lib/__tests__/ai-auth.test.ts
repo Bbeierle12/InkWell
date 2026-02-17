@@ -44,7 +44,7 @@ describe('ai-auth', () => {
   });
 
   it('exposes unsupported subscription sign-in capability flag', () => {
-    expect(CLAUDE_SUBSCRIPTION_SIGNIN_SUPPORTED).toBe(true);
+    expect(CLAUDE_SUBSCRIPTION_SIGNIN_SUPPORTED).toBe(false);
   });
 
   it('returns a helpful missing-key message', () => {
