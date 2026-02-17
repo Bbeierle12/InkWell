@@ -23,9 +23,10 @@ interface ToolbarProps {
   voicePipeline: UseVoicePipelineReturn;
   isLocalMode: boolean;
   onOpenSettings?: () => void;
+  onToggleChat?: () => void;
 }
 
-export function Toolbar({ editor, onAIOperation, voicePipeline, isLocalMode, onOpenSettings }: ToolbarProps) {
+export function Toolbar({ editor, onAIOperation, voicePipeline, isLocalMode, onOpenSettings, onToggleChat }: ToolbarProps) {
   const [, setTick] = useState(0);
   const [aiDropdownOpen, setAiDropdownOpen] = useState(false);
   const { toggleSidebar, sidebarOpen } = useDocumentStore();
@@ -256,6 +257,22 @@ export function Toolbar({ editor, onAIOperation, voicePipeline, isLocalMode, onO
 
       {/* Right-aligned section */}
       <div className="flex-1" />
+
+      {/* Chat toggle */}
+      {onToggleChat && (
+        <button
+          type="button"
+          className="inkwell-toolbar-btn"
+          onClick={onToggleChat}
+          aria-label="AI Chat (Ctrl+Shift+L)"
+          title="AI Chat (Ctrl+Shift+L)"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 3h12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H5l-3 3V4a1 1 0 0 1 1-1z" />
+            <path d="M5 7h6M5 9.5h4" />
+          </svg>
+        </button>
+      )}
 
       {/* Settings */}
       {onOpenSettings && (

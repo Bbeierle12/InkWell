@@ -165,6 +165,24 @@ export enum VoicePipelineEvent {
   Reset = 'reset',
 }
 
+// --- Chat Types ---
+
+/** Role in a chat conversation. */
+export type ChatRole = 'user' | 'assistant';
+
+/** A single message in the chat conversation. */
+export interface ChatMessage {
+  id: string;
+  role: ChatRole;
+  content: string;
+  editInstructions?: AIEditInstruction[];
+  editStatus?: 'pending' | 'accepted' | 'rejected';
+  timestamp: number;
+}
+
+/** Status of the chat streaming connection. */
+export type ChatStreamStatus = 'idle' | 'streaming' | 'error';
+
 /** Context data carried through the voice pipeline. */
 export interface VoicePipelineContext {
   audioBlob: Blob | null;

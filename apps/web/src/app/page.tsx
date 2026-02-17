@@ -17,17 +17,20 @@ import type { SlashCommandItem } from '@inkwell/editor';
 
 import { Toolbar } from '@/components/Toolbar';
 import { Sidebar } from '@/components/Sidebar';
+import { ChatPanel } from '@/components/ChatPanel';
 import { BackpressureIndicator } from '@/components/BackpressureIndicator';
 import { EditorArea } from '@/components/EditorArea';
 import { StatusBar } from '@/components/StatusBar';
 import { SetupScreen } from '@/components/SetupScreen';
 import { SettingsModal } from '@/components/SettingsModal';
 import { useDocumentAI } from '@/hooks/useDocumentAI';
+import { useChatAI } from '@/hooks/useChatAI';
 import { useGhostText } from '@/hooks/useGhostText';
 import { useVoicePipeline } from '@/hooks/useVoicePipeline';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useFileOpen } from '@/hooks/useFileOpen';
 import { useDocumentStore } from '@/lib/document-store';
+import { useChatStore } from '@/lib/chat-store';
 import { useSettingsStore, FONT_FAMILY_MAP, FONT_SIZE_MAP, EDITOR_WIDTH_MAP } from '@/lib/settings-store';
 import { deriveTitleFromContent } from '@/lib/document-utils';
 import { isTauriEnvironment, checkModelsStatus, getClaudeAuthStatus } from '@/lib/tauri-bridge';
@@ -157,6 +160,13 @@ export default function Home() {
     rejectDiff,
   } = useDocumentAI({ editor });
 
+  const { sendMessage, stopStreaming, applyEdits, dismissEdits } = useChatAI({
+    editor,
+    acceptDiff,
+    rejectDiff,
+  });
+  const toggleChat = useChatStore((s) => s.toggleChat);
+
   useGhostText({ editor, enabled: isReady && ghostTextEnabled });
   const voicePipeline = useVoicePipeline({ editor });
   useAutoSave({ editor });
@@ -231,17 +241,21 @@ export default function Home() {
     [executeOperation],
   );
 
-  // Keyboard shortcut: Ctrl+\ to toggle sidebar
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === '\\') {
         e.preventDefault();
         toggleSidebar();
       }
+      if (e.ctrlKey && e.shiftKey && e.key === 'L') {
+        e.preventDefault();
+        toggleChat();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [toggleSidebar]);
+  }, [toggleSidebar, toggleChat]);
 
   // Show loading state while checking setup
   if (!setupChecked) {
@@ -265,6 +279,7 @@ export default function Home() {
         voicePipeline={voicePipeline}
         isLocalMode={isLocalMode}
         onOpenSettings={() => setSettingsOpen(true)}
+        onToggleChat={toggleChat}
       />
       <BackpressureIndicator
         isPaused={isPaused}
@@ -293,6 +308,12 @@ export default function Home() {
           </div>
           <StatusBar editor={editor} />
         </div>
+        <ChatPanel
+          sendMessage={sendMessage}
+          stopStreaming={stopStreaming}
+          applyEdits={applyEdits}
+          dismissEdits={dismissEdits}
+        />
       </div>
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </main>
