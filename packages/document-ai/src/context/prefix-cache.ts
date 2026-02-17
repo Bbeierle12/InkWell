@@ -6,7 +6,7 @@
  */
 
 export class PrefixCache {
-  private cache: Map<string, string> = new Map();
+  private cache: Map<string, { contentHash: string; prefix: string }> = new Map();
 
   /**
    * Get or compute the stable prefix for a document.
@@ -15,14 +15,33 @@ export class PrefixCache {
    * Otherwise, calls computeFn to generate the prefix, caches it,
    * and returns the result.
    */
-  getPrefix(docId: string, computeFn: () => string): string {
+  getPrefix(
+    docId: string,
+    contentHashOrComputeFn: string | (() => string),
+    maybeComputeFn?: () => string,
+  ): string {
+    const isLegacyCall = typeof contentHashOrComputeFn === 'function';
+    const contentHash =
+      typeof contentHashOrComputeFn === 'string' ? contentHashOrComputeFn : '';
+    const computeFn =
+      typeof contentHashOrComputeFn === 'function'
+        ? contentHashOrComputeFn
+        : maybeComputeFn;
+
+    if (!computeFn) {
+      throw new Error('PrefixCache.getPrefix requires a compute function');
+    }
+
     const cached = this.cache.get(docId);
-    if (cached !== undefined) {
-      return cached;
+    if (
+      cached !== undefined &&
+      (isLegacyCall || cached.contentHash === contentHash || cached.contentHash === '')
+    ) {
+      return cached.prefix;
     }
 
     const prefix = computeFn();
-    this.cache.set(docId, prefix);
+    this.cache.set(docId, { contentHash, prefix });
     return prefix;
   }
 

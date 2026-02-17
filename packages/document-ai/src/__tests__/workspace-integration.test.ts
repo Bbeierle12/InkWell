@@ -87,14 +87,17 @@ describe('8.2 Workspace Context Integration', () => {
   });
 
   it('should pass query to retriever based on cursor position', async () => {
-    const mockRetrieve = vi.fn(async () => [DOC2_SNIPPET]);
+    const mockRetrieve = vi.fn(
+      async (_query: string, _maxTokens: number) => [DOC2_SNIPPET],
+    );
     const retriever: WorkspaceRetriever = { retrieve: mockRetrieve };
     const cm = new ContextManager({ workspaceRetriever: retriever });
 
     await cm.build(DOC1, 30, 'doc1', 16_000);
 
     expect(mockRetrieve).toHaveBeenCalledTimes(1);
-    const [query, budget] = mockRetrieve.mock.calls[0];
+    const query = mockRetrieve.mock.calls[0]?.[0] ?? '';
+    const budget = mockRetrieve.mock.calls[0]?.[1] ?? 0;
     expect(typeof query).toBe('string');
     expect(query.length).toBeGreaterThan(0);
     expect(typeof budget).toBe('number');

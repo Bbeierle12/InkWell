@@ -8,7 +8,8 @@
     "build:debug": "tauri build --debug",
     "build:local-inference": "tauri build -- --features local-inference",
     "typecheck": "cd src-tauri && cargo check",
-    "test": "cd src-tauri && cargo test"
+    "test": "cd src-tauri && cargo test",
+    "test:unit": "cd src-tauri && cargo test"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.10.0"

@@ -21,11 +21,12 @@ let watcher: FileWatcher | null = null;
 export function workspaceWatch(
   patterns: string[],
   fileWatcher?: FileWatcher,
+  onChange?: (path: string) => void,
 ): void {
   const fw = fileWatcher ?? (watcher ??= new FileWatcher());
   for (const pattern of patterns) {
-    fw.watch(pattern, () => {
-      /* re-index triggered externally */
+    fw.watch(pattern, (path) => {
+      onChange?.(path);
     });
   }
 }

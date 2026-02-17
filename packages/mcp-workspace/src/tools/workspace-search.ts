@@ -4,7 +4,7 @@
  * MCP tool that searches the workspace index for relevant documents.
  */
 
-import type { SearchResult } from '@inkwell/shared';
+import type { SearchResult, WorkspaceRetriever } from '@inkwell/shared';
 import type { VectorStore } from '../indexer/vector-store';
 import { simpleEmbed } from '../indexer/embed';
 
@@ -22,7 +22,23 @@ export async function workspaceSearch(
   query: string,
   limit: number = 10,
   store?: VectorStore,
+  retriever?: WorkspaceRetriever,
 ): Promise<SearchResult[]> {
+  if (retriever) {
+    const snippetBudget = Math.max(limit * 100, 100);
+    const snippets = await retriever.retrieve(query, snippetBudget);
+    return snippets.slice(0, limit).map((snippet, index) => ({
+      chunkId: `${snippet.path}:${index}`,
+      content: snippet.content,
+      score: snippet.score,
+      metadata: {
+        path: snippet.path,
+        offset: 0,
+        length: snippet.content.length,
+      },
+    }));
+  }
+
   if (!store) return [];
 
   const queryVector = simpleEmbed(query);

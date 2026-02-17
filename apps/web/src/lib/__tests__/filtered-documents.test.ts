@@ -43,6 +43,7 @@ function makeState(overrides: {
     markDirty: () => {},
     markClean: () => {},
     setTitle: () => {},
+    openExternalDocument: () => {},
     setSidebarOpen: () => {},
     toggleSidebar: () => {},
     setSortMode: () => {},

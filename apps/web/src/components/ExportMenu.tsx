@@ -23,7 +23,8 @@ interface ExportMenuProps {
 export function ExportMenu({ editor }: ExportMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const { title, setTitle, currentDocumentId } = useDocumentStore();
+  const title = useDocumentStore((state) => state.title);
+  const openExternalDocument = useDocumentStore((state) => state.openExternalDocument);
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -97,15 +98,21 @@ export function ExportMenu({ editor }: ExportMenuProps) {
         const { path, content } = result;
         if (path.endsWith('.inkwell')) {
           const schema = deserializeInkwellFile(content);
-          editor.commands.setContent(schema.content);
-          setTitle(schema.metadata.title);
+          editor.commands.setContent(schema.content, false);
+          openExternalDocument(schema.metadata.title);
           showToast('Inkwell document opened');
         } else if (path.endsWith('.md')) {
           const doc = markdownToEditorJson(content);
-          editor.commands.setContent(doc);
+          editor.commands.setContent(doc, false);
+          const filename = path.split(/[/\\]/).pop() ?? 'Untitled';
+          const titleFromFile = filename.replace(/\.md$/, '');
+          openExternalDocument(titleFromFile || 'Untitled');
           showToast('Markdown file opened');
         } else {
-          editor.commands.setContent(`<p>${content}</p>`);
+          editor.commands.setContent(`<p>${content}</p>`, false);
+          const filename = path.split(/[/\\]/).pop() ?? 'Untitled';
+          const titleFromFile = filename.replace(/\.[^.]+$/, '');
+          openExternalDocument(titleFromFile || 'Untitled');
           showToast('File opened');
         }
       }
@@ -113,7 +120,7 @@ export function ExportMenu({ editor }: ExportMenuProps) {
       showToast('Open failed');
     }
     setIsOpen(false);
-  }, [editor, setTitle, showToast]);
+  }, [editor, openExternalDocument, showToast]);
 
   const isTauri = isTauriEnvironment();
 

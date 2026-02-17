@@ -112,4 +112,13 @@ describe('chunker', () => {
     const lastChunk = chunks2[chunks2.length - 1];
     expect(lastChunk.metadata.offset + lastChunk.metadata.length).toBe(content2.length);
   });
+
+  it('should reject overlap greater than or equal to chunk size', () => {
+    expect(() => chunkDocument('hello world', 'bad.txt', 10, 10)).toThrow(
+      /overlap must be smaller than chunkSize/,
+    );
+    expect(() => chunkDocument('hello world', 'bad.txt', 10, 12)).toThrow(
+      /overlap must be smaller than chunkSize/,
+    );
+  });
 });

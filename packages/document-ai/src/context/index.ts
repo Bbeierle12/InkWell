@@ -86,7 +86,7 @@ export class ContextManager {
    * @param docContent - The full document text
    * @param cursorPos - The cursor position within the document
    * @param docId - Optional document identifier for cache keying (defaults to 'default')
-   * @param tokenBudget - Optional total token budget for workspace snippet allocation
+    * @param tokenBudget - Optional total token budget for workspace snippet allocation
    */
   async build(
     docContent: string,
@@ -94,8 +94,10 @@ export class ContextManager {
     docId: string = 'default',
     tokenBudget?: number,
   ): Promise<DocumentContext> {
+    const contentHash = djb2Hash(docContent);
+
     // 1. Build stable prefix (using cache)
-    const stablePrefix = this.prefixCache.getPrefix(docId, () =>
+    const stablePrefix = this.prefixCache.getPrefix(docId, contentHash, () =>
       this.computeStablePrefix(docContent),
     );
 
@@ -107,8 +109,10 @@ export class ContextManager {
     let workspaceSnippets = '';
     if (this.workspaceRetriever && tokenBudget) {
       const prefixTokens = Math.ceil(stablePrefix.length / CHARS_PER_TOKEN);
+      const windowTokens = Math.ceil(volatileSuffix.length / CHARS_PER_TOKEN);
+      const remainingTokens = Math.max(0, tokenBudget - prefixTokens - windowTokens);
       const snippetBudget = Math.floor(
-        (tokenBudget - prefixTokens) * WORKSPACE_SNIPPET_RATIO,
+        remainingTokens * WORKSPACE_SNIPPET_RATIO,
       );
 
       if (snippetBudget > 0) {

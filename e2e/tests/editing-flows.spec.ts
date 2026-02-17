@@ -20,14 +20,14 @@ test.describe('7.1 Core Editing', () => {
   test('should type and display text', async ({ page }) => {
     const textbox = page.getByRole('textbox', { name: 'Document editor' });
     await textbox.click();
-    await page.keyboard.pressSequentially('Hello World');
+    await page.keyboard.type('Hello World');
     await expect(textbox).toContainText('Hello World');
   });
 
   test('should apply bold formatting', async ({ page }) => {
     const textbox = page.getByRole('textbox', { name: 'Document editor' });
     await textbox.click();
-    await page.keyboard.pressSequentially('Bold text');
+    await page.keyboard.type('Bold text');
 
     // Select all text
     await page.keyboard.press('Control+a');
@@ -46,7 +46,7 @@ test.describe('7.1 Core Editing', () => {
   test('should apply italic formatting', async ({ page }) => {
     const textbox = page.getByRole('textbox', { name: 'Document editor' });
     await textbox.click();
-    await page.keyboard.pressSequentially('Italic text');
+    await page.keyboard.type('Italic text');
 
     await page.keyboard.press('Control+a');
     await page.getByRole('button', { name: 'Italic' }).click();
@@ -61,7 +61,7 @@ test.describe('7.1 Core Editing', () => {
   test('should undo and redo edits', async ({ page }) => {
     const textbox = page.getByRole('textbox', { name: 'Document editor' });
     await textbox.click();
-    await page.keyboard.pressSequentially('Hello');
+    await page.keyboard.type('Hello');
 
     await expect(textbox).toContainText('Hello');
 
@@ -79,7 +79,7 @@ test.describe('7.1 Core Editing', () => {
   test('should change heading levels', async ({ page }) => {
     const textbox = page.getByRole('textbox', { name: 'Document editor' });
     await textbox.click();
-    await page.keyboard.pressSequentially('Heading Text');
+    await page.keyboard.type('Heading Text');
 
     // Select all
     await page.keyboard.press('Control+a');
@@ -96,7 +96,7 @@ test.describe('7.1 Core Editing', () => {
   test('should toggle list types', async ({ page }) => {
     const textbox = page.getByRole('textbox', { name: 'Document editor' });
     await textbox.click();
-    await page.keyboard.pressSequentially('List item');
+    await page.keyboard.type('List item');
 
     // Click Bullet list
     await page.getByRole('button', { name: 'Bullet list' }).click();
@@ -112,7 +112,7 @@ test.describe('7.1 Core Editing', () => {
   test('should handle copy and paste', async ({ page }) => {
     const textbox = page.getByRole('textbox', { name: 'Document editor' });
     await textbox.click();
-    await page.keyboard.pressSequentially('Copy me');
+    await page.keyboard.type('Copy me');
 
     // Select all, copy
     await page.keyboard.press('Control+a');

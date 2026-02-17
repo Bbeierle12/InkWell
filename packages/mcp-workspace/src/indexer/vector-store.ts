@@ -178,6 +178,42 @@ export class VectorStore {
   }
 
   /**
+   * Remove all chunks that belong to a specific file path.
+   */
+  async deleteByPath(path: string): Promise<void> {
+    this.ensureInitialized();
+
+    const rows = this.db!.prepare(
+      'SELECT id, rowid, metadata FROM chunks',
+    ).all() as Array<{ id: string; rowid: number; metadata: string }>;
+
+    const toDelete = rows.filter((row) => {
+      try {
+        const metadata = JSON.parse(row.metadata) as { path?: string };
+        return metadata.path === path;
+      } catch {
+        return false;
+      }
+    });
+
+    if (toDelete.length === 0) {
+      return;
+    }
+
+    const deleteChunkStmt = this.db!.prepare('DELETE FROM chunks WHERE id = ?');
+    const deleteVecStmt = this.vecAvailable
+      ? this.db!.prepare('DELETE FROM vec_chunks WHERE rowid = ?')
+      : null;
+
+    for (const row of toDelete) {
+      if (deleteVecStmt) {
+        deleteVecStmt.run(row.rowid);
+      }
+      deleteChunkStmt.run(row.id);
+    }
+  }
+
+  /**
    * Close the database connection and reset state.
    */
   close(): void {

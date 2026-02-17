@@ -4,6 +4,7 @@
 //! They handle serialization, validation, and delegation to the inference engines.
 
 use serde::{Deserialize, Serialize};
+use std::path::{Component, Path};
 use tauri::{Emitter, State};
 
 use crate::AppState;
@@ -106,6 +107,50 @@ fn bridge_err(err: InferenceError) -> String {
     serde_json::to_string(&be).unwrap_or_else(|_| be.to_string())
 }
 
+fn join_err(err: tokio::task::JoinError) -> String {
+    bridge_err(InferenceError::InferenceFailed(format!(
+        "Background task failed: {}",
+        err
+    )))
+}
+
+fn sanitize_model_filename(filename: &str) -> Result<String, String> {
+    if filename.trim().is_empty() {
+        return Err("Model filename cannot be empty".to_string());
+    }
+
+    let path = Path::new(filename);
+    let mut components = path.components();
+    let first = components.next();
+    if first.is_none() || components.next().is_some() {
+        return Err("Model filename must be a single file name".to_string());
+    }
+
+    let safe = match first.unwrap() {
+        Component::Normal(name) => name.to_string_lossy().to_string(),
+        _ => return Err("Invalid model filename".to_string()),
+    };
+
+    if safe.contains('\0') {
+        return Err("Invalid model filename".to_string());
+    }
+
+    Ok(safe)
+}
+
+fn decode_f32_le_audio(audio_bytes: &[u8]) -> Result<Vec<f32>, InferenceError> {
+    let chunks = audio_bytes.chunks_exact(4);
+    if !chunks.remainder().is_empty() {
+        return Err(InferenceError::InvalidAudio(
+            "Audio byte length must be divisible by 4 (f32 PCM)".to_string(),
+        ));
+    }
+
+    Ok(chunks
+        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
+        .collect())
+}
+
 /// Validate an inference request before processing.
 pub fn validate_inference_request(req: &InferenceRequest) -> Result<(), BridgeError> {
     if req.prompt.is_empty() {
@@ -181,7 +226,12 @@ pub async fn invoke_local_inference(
         stop_sequences: Vec::new(),
     };
 
-    let result = state.llm.generate(&request.prompt, &params).map_err(bridge_err)?;
+    let llm = state.llm.clone();
+    let prompt = request.prompt.clone();
+    let result = tokio::task::spawn_blocking(move || llm.generate(&prompt, &params))
+        .await
+        .map_err(join_err)?
+        .map_err(bridge_err)?;
 
     Ok(InferenceResponse {
         text: result.text,
@@ -201,20 +251,22 @@ pub async fn transcribe_audio(
     })?;
 
     // Read audio file as PCM f32 (simplified: assumes raw f32 PCM at 16kHz)
-    let audio_bytes = std::fs::read(&request.audio_path).map_err(|e| {
+    let audio_bytes = tokio::fs::read(&request.audio_path).await.map_err(|e| {
         bridge_err(InferenceError::InvalidAudio(format!(
             "Failed to read audio file: {}", e
         )))
     })?;
 
-    // Convert bytes to f32 samples
-    let audio: Vec<f32> = audio_bytes
-        .chunks_exact(4)
-        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
-        .collect();
+    let audio = decode_f32_le_audio(&audio_bytes).map_err(bridge_err)?;
 
-    let lang_hint = request.language.as_deref();
-    let result = state.stt.transcribe(&audio, lang_hint).map_err(bridge_err)?;
+    let stt = state.stt.clone();
+    let language = request.language.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        stt.transcribe(&audio, language.as_deref())
+    })
+    .await
+    .map_err(join_err)?
+    .map_err(bridge_err)?;
 
     Ok(TranscribeResponse {
         text: result.text,
@@ -350,27 +402,29 @@ pub async fn transcribe_with_partials(
         serde_json::to_string(&e).unwrap_or_else(|_| e.to_string())
     })?;
 
-    let audio_bytes = std::fs::read(&request.audio_path).map_err(|e| {
+    let audio_bytes = tokio::fs::read(&request.audio_path).await.map_err(|e| {
         bridge_err(InferenceError::InvalidAudio(format!(
             "Failed to read audio file: {}", e
         )))
     })?;
 
-    let audio: Vec<f32> = audio_bytes
-        .chunks_exact(4)
-        .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
-        .collect();
-
-    let lang_hint = request.language.as_deref();
+    let audio = decode_f32_le_audio(&audio_bytes).map_err(bridge_err)?;
+    let stt = state.stt.clone();
+    let language = request.language.clone();
     let app_handle = app.clone();
 
-    let result = state.stt.transcribe_streaming(
-        &audio,
-        lang_hint,
-        &mut |partial| {
-            let _ = app_handle.emit("whisper-partial", partial.to_string());
-        },
-    ).map_err(bridge_err)?;
+    let result = tokio::task::spawn_blocking(move || {
+        stt.transcribe_streaming(
+            &audio,
+            language.as_deref(),
+            &mut |partial| {
+                let _ = app_handle.emit("whisper-partial", partial.to_string());
+            },
+        )
+    })
+    .await
+    .map_err(join_err)?
+    .map_err(bridge_err)?;
 
     Ok(TranscribeResponse {
         text: result.text,
@@ -418,8 +472,15 @@ pub async fn transcribe_audio_bytes(
         serde_json::to_string(&e).unwrap_or_else(|_| e.to_string())
     })?;
 
-    let lang_hint = request.language.as_deref();
-    let result = state.stt.transcribe(&request.samples, lang_hint).map_err(bridge_err)?;
+    let stt = state.stt.clone();
+    let language = request.language.clone();
+    let samples = request.samples.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        stt.transcribe(&samples, language.as_deref())
+    })
+    .await
+    .map_err(join_err)?
+    .map_err(bridge_err)?;
 
     Ok(TranscribeResponse {
         text: result.text,
@@ -581,7 +642,9 @@ pub async fn check_models_status() -> Result<ModelsStatus, String> {
                         size_bytes,
                         model_type: "llm".to_string(),
                     });
-                } else if filename.ends_with(".bin") && filename.contains("whisper") {
+                } else if filename.ends_with(".bin")
+                    && (filename.contains("whisper") || filename.starts_with("ggml-"))
+                {
                     whisper_models.push(ModelInfo {
                         name,
                         filename,
@@ -620,8 +683,9 @@ pub async fn download_model(
         .await
         .map_err(|e| format!("Failed to create models directory: {}", e))?;
 
-    let dest = models_dir.join(&filename);
-    let model_name = filename.clone();
+    let safe_filename = sanitize_model_filename(&filename)?;
+    let dest = models_dir.join(&safe_filename);
+    let model_name = safe_filename.clone();
 
     let client = reqwest::Client::new();
     let response = client.get(&url)
@@ -1112,6 +1176,30 @@ mod tests {
         };
         let err = validate_transcribe_audio_bytes_request(&req).unwrap_err();
         assert_eq!(err.code, "INVALID_LANGUAGE");
+    }
+
+    #[test]
+    fn test_sanitize_model_filename_rejects_path_traversal() {
+        assert!(sanitize_model_filename("../evil.gguf").is_err());
+        assert!(sanitize_model_filename("..\\evil.gguf").is_err());
+        assert!(sanitize_model_filename("nested/evil.gguf").is_err());
+    }
+
+    #[test]
+    fn test_sanitize_model_filename_accepts_basename() {
+        let safe = sanitize_model_filename("llama-3-8b.gguf").unwrap();
+        assert_eq!(safe, "llama-3-8b.gguf");
+    }
+
+    #[test]
+    fn test_decode_f32_le_audio_rejects_misaligned_bytes() {
+        let err = decode_f32_le_audio(&[1_u8, 2, 3]).unwrap_err();
+        match err {
+            InferenceError::InvalidAudio(msg) => {
+                assert!(msg.contains("divisible by 4"));
+            }
+            other => panic!("Expected InvalidAudio, got {:?}", other),
+        }
     }
 
     // ── §10.1: FileFilter deserialization ──

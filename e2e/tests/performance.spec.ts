@@ -24,7 +24,7 @@ test.describe('7.4 Performance', () => {
     // Type 100 characters with no delay and measure total time
     const text = 'a'.repeat(100);
     const start = Date.now();
-    await page.keyboard.pressSequentially(text, { delay: 0 });
+    await page.keyboard.type(text);
     const elapsed = Date.now() - start;
 
     // Average should be under 50ms per keystroke (5000ms total for 100 chars)
@@ -60,7 +60,7 @@ test.describe('7.4 Performance', () => {
 
     // Type one more character to verify responsiveness
     await page.keyboard.press('End');
-    await page.keyboard.pressSequentially('X');
+    await page.keyboard.type('X');
     const content = await textbox.textContent();
     expect(content).toContain('X');
   });
@@ -74,7 +74,7 @@ test.describe('7.4 Performance', () => {
 
     // Type 50 paragraphs to force scrollable content
     for (let i = 0; i < 50; i++) {
-      await page.keyboard.pressSequentially(`Paragraph ${i + 1} with some extra text to fill the line.`, { delay: 0 });
+      await page.keyboard.type(`Paragraph ${i + 1} with some extra text to fill the line.`);
       await page.keyboard.press('Enter');
     }
 

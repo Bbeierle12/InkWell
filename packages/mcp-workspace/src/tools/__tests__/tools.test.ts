@@ -23,6 +23,20 @@ describe('workspace-search', () => {
     const results = await workspaceSearch('hello world');
     expect(results).toEqual([]);
   });
+
+  it('returns mapped results when retriever is provided', async () => {
+    const retriever = {
+      retrieve: vi.fn(async () => [
+        { path: 'docs/notes.md', content: 'alpha beta', score: 0.9 },
+      ]),
+    };
+
+    const results = await workspaceSearch('alpha', 5, undefined, retriever);
+    expect(results).toHaveLength(1);
+    expect(results[0].metadata.path).toBe('docs/notes.md');
+    expect(results[0].content).toContain('alpha');
+    expect(results[0].chunkId).toContain('docs/notes.md');
+  });
 });
 
 describe('workspace-watch', () => {

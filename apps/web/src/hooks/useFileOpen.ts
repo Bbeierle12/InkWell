@@ -24,7 +24,7 @@ interface UseFileOpenOptions {
 
 export function useFileOpen({ editor }: UseFileOpenOptions) {
   const editorRef = useRef(editor);
-  const { setTitle } = useDocumentStore();
+  const openExternalDocument = useDocumentStore((state) => state.openExternalDocument);
   const processedRef = useRef(false);
 
   // Keep editor ref current
@@ -43,27 +43,29 @@ export function useFileOpen({ editor }: UseFileOpenOptions) {
       if (path.endsWith('.inkwell')) {
         try {
           const schema = deserializeInkwellFile(content);
-          currentEditor.commands.setContent(schema.content);
-          setTitle(schema.metadata.title);
+          currentEditor.commands.setContent(schema.content, false);
+          openExternalDocument(schema.metadata.title);
         } catch {
           // Fall back to plain text if deserialization fails
-          currentEditor.commands.setContent(`<p>${content}</p>`);
+          currentEditor.commands.setContent(`<p>${content}</p>`, false);
+          openExternalDocument('Untitled');
         }
       } else if (path.endsWith('.md')) {
         const doc = markdownToEditorJson(content);
-        currentEditor.commands.setContent(doc);
+        currentEditor.commands.setContent(doc, false);
         // Derive title from filename
         const filename = path.split(/[/\\]/).pop() ?? 'Untitled';
         const titleFromFile = filename.replace(/\.md$/, '');
-        if (titleFromFile) {
-          setTitle(titleFromFile);
-        }
+        openExternalDocument(titleFromFile || 'Untitled');
       } else {
         // Plain text fallback
-        currentEditor.commands.setContent(`<p>${content}</p>`);
+        currentEditor.commands.setContent(`<p>${content}</p>`, false);
+        const filename = path.split(/[/\\]/).pop() ?? 'Untitled';
+        const titleFromFile = filename.replace(/\.[^.]+$/, '');
+        openExternalDocument(titleFromFile || 'Untitled');
       }
     },
-    [setTitle],
+    [openExternalDocument],
   );
 
   useEffect(() => {

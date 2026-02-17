@@ -7,7 +7,6 @@
  * document list, sort control, and trash toggle.
  */
 
-import { useCallback } from 'react';
 import type { Editor } from '@tiptap/core';
 import { DocumentList } from './DocumentList';
 import { SearchBar } from './SearchBar';
@@ -38,7 +37,7 @@ export function Sidebar({ editor, onOpenSettings }: SidebarProps) {
     // Don't reload the document we're already viewing
     if (id === documentId) return;
     // Save current document before switching if it has unsaved changes
-    if (documentId && store.isDirty) {
+    if (store.isDirty) {
       await store.save(editor);
     }
     await load(id, editor);

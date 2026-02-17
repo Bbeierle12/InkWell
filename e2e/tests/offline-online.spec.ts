@@ -32,8 +32,8 @@ test.describe('7.3 Offline/Online Transitions', () => {
     await expect(offlineChip).toContainText('Offline');
 
     // BackpressureIndicator should show "Local mode"
-    const backpressure = page.getByRole('status', { name: /./i }).filter({ hasText: 'Local mode' });
-    await expect(backpressure).toBeVisible({ timeout: 5000 });
+    const localMode = page.getByText('Local mode');
+    await expect(localMode).toBeVisible({ timeout: 5000 });
   });
 
   test('should recover to Online mode when network is restored', async ({ page, context }) => {
@@ -60,7 +60,7 @@ test.describe('7.3 Offline/Online Transitions', () => {
     // Type text — editor should still work
     const textbox = page.getByRole('textbox', { name: 'Document editor' });
     await textbox.click();
-    await page.keyboard.pressSequentially('Offline text');
+    await page.keyboard.type('Offline text');
 
     // Verify text was entered
     await expect(textbox).toContainText('Offline text');

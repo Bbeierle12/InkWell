@@ -48,6 +48,7 @@ interface DocumentStoreState {
   markDirty: () => void;
   markClean: () => void;
   setTitle: (title: string) => void;
+  openExternalDocument: (title: string) => void;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
   setSortMode: (mode: SortMode) => void;
@@ -225,6 +226,13 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
   markClean: () => set({ isDirty: false }),
 
   setTitle: (title: string) => set({ title: title.trim(), isDirty: true }),
+  openExternalDocument: (title: string) =>
+    set({
+      documentId: null,
+      title: title.trim() || 'Untitled',
+      isDirty: false,
+      lastSavedAt: null,
+    }),
 
   setSidebarOpen: (open: boolean) => set({ sidebarOpen: open }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),

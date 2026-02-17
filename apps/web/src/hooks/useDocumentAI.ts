@@ -10,9 +10,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/core';
 import { OperationType } from '@inkwell/shared';
-import { DiffPreviewPluginKey } from '@inkwell/editor';
-import { AIOperationSession } from '@inkwell/editor';
+import { DiffPreviewPluginKey, AIOperationSession, clampPosition } from '@inkwell/editor';
 import { getDocumentAI, destroyDocumentAI } from '../lib/document-ai-instance';
+import { useDocumentStore } from '../lib/document-store';
 
 interface UseDocumentAIOptions {
   editor: Editor | null;
@@ -90,6 +90,7 @@ export function useDocumentAI({ editor }: UseDocumentAIOptions) {
         const { from, to } = editor.state.selection;
         const docContent = editor.state.doc.textContent;
         const selectionText = editor.state.doc.textBetween(from, to, '\n');
+        const docId = useDocumentStore.getState().documentId ?? undefined;
 
         const result = await service.executeOperation({
           operation,
@@ -97,6 +98,7 @@ export function useDocumentAI({ editor }: UseDocumentAIOptions) {
           cursorPos: from,
           selection: { from, to, text: selectionText },
           targetTone: args,
+          docId,
         });
 
         // Check if aborted while awaiting
@@ -158,19 +160,23 @@ export function useDocumentAI({ editor }: UseDocumentAIOptions) {
       const { from, to } = inst.range;
       let tr;
 
+      const clampedFrom = clampPosition(from, state.doc);
+      const clampedTo = clampPosition(to, state.doc);
+      const safeFrom = Math.min(clampedFrom, clampedTo);
+      const safeTo = Math.max(clampedFrom, clampedTo);
+
       switch (inst.type) {
         case 'replace':
-          tr = state.tr.replaceWith(
-            from,
-            to,
-            inst.content ? state.schema.text(inst.content) : state.doc.type.schema.text(''),
-          );
+          tr = state.tr.insertText(inst.content || '', safeFrom, safeTo);
           break;
         case 'insert':
-          tr = state.tr.insertText(inst.content || '', from);
+          tr = state.tr.insertText(inst.content || '', safeFrom);
           break;
         case 'delete':
-          tr = state.tr.delete(from, to);
+          if (safeTo <= safeFrom) {
+            continue;
+          }
+          tr = state.tr.delete(safeFrom, safeTo);
           break;
         default:
           continue;

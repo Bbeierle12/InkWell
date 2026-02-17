@@ -26,7 +26,16 @@ export function useAutoSave({ editor }: UseAutoSaveOptions) {
   useEffect(() => {
     if (!editor) return;
 
-    const handler = () => markDirty();
+    const handler = (event: {
+      transaction: {
+        docChanged: boolean;
+        getMeta: (key: string) => unknown;
+      };
+    }) => {
+      if (!event.transaction.docChanged) return;
+      if (event.transaction.getMeta('preventUpdate')) return;
+      markDirty();
+    };
     editor.on('update', handler);
     return () => {
       editor.off('update', handler);

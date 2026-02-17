@@ -57,7 +57,8 @@ test.describe('7.2 AI UI Flows', () => {
     await expect(menu).toBeVisible({ timeout: 5000 });
 
     // Type "re" to filter — should show only Rewrite
-    await page.keyboard.pressSequentially('re');
+    await page.keyboard.press('r');
+    await page.keyboard.press('e');
 
     // Wait for filtering to take effect
     const options = menu.locator('[role="option"]');

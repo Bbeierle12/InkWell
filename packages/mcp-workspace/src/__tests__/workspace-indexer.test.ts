@@ -93,6 +93,21 @@ describe('8.1 WorkspaceIndexer', () => {
     ).rejects.toThrow(/not initialized/);
   });
 
+  it('should replace stale chunks when re-indexing the same path', async () => {
+    await indexer.indexDocument('docs/topic.md', 'Cats purr and chase yarn.');
+    await indexer.indexDocument('docs/topic.md', 'Dogs bark and play fetch.');
+
+    const snippets = await indexer.retrieve('cats yarn', 1000);
+    const stale = snippets.find((s) => s.content.includes('Cats purr'));
+    expect(stale).toBeUndefined();
+  });
+
+  it('should clear existing chunks for a path before inserting new chunks', async () => {
+    const deleteSpy = vi.spyOn(store, 'deleteByPath');
+    await indexer.indexDocument('docs/replace.md', 'First version');
+    expect(deleteSpy).toHaveBeenCalledWith('docs/replace.md');
+  });
+
   it('should close store and watcher on close()', async () => {
     const stopSpy = vi.spyOn(watcher, 'stop');
     const closeSpy = vi.spyOn(store, 'close');

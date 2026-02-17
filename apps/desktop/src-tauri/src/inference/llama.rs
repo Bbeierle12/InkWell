@@ -71,7 +71,7 @@ impl LlamaEngine {
 
         // Unload previous model if loaded
         if inner.state != ModelState::Unloaded {
-            let _ = inner.backend.unload();
+            inner.backend.unload()?;
         }
 
         let metadata = inner.backend.load(path)?;

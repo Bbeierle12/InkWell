@@ -35,6 +35,9 @@ export function chunkDocument(
   }
 
   const step = chunkSize - overlap;
+  if (step <= 0) {
+    throw new Error('overlap must be smaller than chunkSize');
+  }
   const chunks: Chunk[] = [];
   let offset = 0;
 

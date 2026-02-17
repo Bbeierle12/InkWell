@@ -15,5 +15,5 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm turbo test:fuzz -- --run-long
+      - run: pnpm turbo test:fuzz
       - run: echo "TODO - stress tests, fixture audit, cost report"

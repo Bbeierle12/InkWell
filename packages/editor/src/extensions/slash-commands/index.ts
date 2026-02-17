@@ -50,13 +50,21 @@ function filterCommands(commands: SlashCommandItem[], query: string): SlashComma
 }
 
 /** Dismiss the slash menu: delete typed slash text and deactivate. */
-function dismissSlashMenu(view: EditorView, pluginState: SlashCommandsPluginState): void {
+function deleteSlashCommandText(view: EditorView, pluginState: SlashCommandsPluginState): void {
   const deleteFrom = pluginState.triggerPos;
-  const deleteTo = view.state.selection.from;
+  const deleteTo = Math.min(
+    view.state.doc.content.size,
+    pluginState.triggerPos + 1 + pluginState.query.length,
+  );
   if (deleteTo > deleteFrom) {
     const deleteTr = view.state.tr.delete(deleteFrom, deleteTo);
     view.dispatch(deleteTr);
   }
+}
+
+/** Dismiss the slash menu: delete typed slash text and deactivate. */
+function dismissSlashMenu(view: EditorView, pluginState: SlashCommandsPluginState): void {
+  deleteSlashCommandText(view, pluginState);
   const deactivateTr = view.state.tr.setMeta(SlashCommandsPluginKey, 'deactivate');
   view.dispatch(deactivateTr);
 }
@@ -203,10 +211,11 @@ export const SlashCommands = Extension.create<SlashCommandsOptions>({
 
             // While active, accumulate query
             if (state.active) {
-              // Let ProseMirror insert the text, then update query
-              view.dispatch(view.state.tr.insertText(text, from, from));
               const newQuery = state.query + text;
-              const tr = view.state.tr.setMeta(SlashCommandsPluginKey, { query: newQuery });
+              // Keep insert + query update in one transaction so active state is preserved.
+              const tr = view.state.tr
+                .insertText(text, from, from)
+                .setMeta(SlashCommandsPluginKey, { query: newQuery });
               view.dispatch(tr);
               return true;
             }
@@ -246,11 +255,7 @@ export const SlashCommands = Extension.create<SlashCommandsOptions>({
                 const commandName = parts[0] || '';
                 const args = parts.slice(1).join(' ');
 
-                // Delete the slash command text: from triggerPos to current cursor
-                const deleteFrom = state.triggerPos;
-                const deleteTo = view.state.selection.from;
-                const deleteTr = view.state.tr.delete(deleteFrom, deleteTo);
-                view.dispatch(deleteTr);
+                deleteSlashCommandText(view, state);
 
                 // Deactivate
                 const deactivateTr = view.state.tr.setMeta(SlashCommandsPluginKey, 'deactivate');

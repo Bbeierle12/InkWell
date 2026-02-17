@@ -48,6 +48,9 @@ export class WorkspaceIndexer implements WorkspaceRetriever {
       throw new Error('WorkspaceIndexer is not initialized. Call initialize() first.');
     }
 
+    // Replace previously indexed chunks for the same path.
+    await this.store.deleteByPath(path);
+
     const chunks = chunkDocument(content, path);
     for (const chunk of chunks) {
       const vector = simpleEmbed(chunk.content);
@@ -113,7 +116,8 @@ export class WorkspaceIndexer implements WorkspaceRetriever {
       const content = await readFile(path, 'utf-8');
       await this.indexDocument(path, content);
     } catch {
-      // File may have been deleted — ignore errors
+      // If file is gone, remove stale chunks for that path.
+      await this.store.deleteByPath(path);
     }
   }
 

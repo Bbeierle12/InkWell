@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:integration": "vitest run src/lib/__tests__/document-store.test.ts src/lib/__tests__/document-store-v2.test.ts src/hooks/__tests__/useDocumentAI-transitions.test.ts src/lib/__tests__/tauri-bridge.test.ts src/lib/__tests__/tauri-bridge-voice.test.ts"
   },
   "dependencies": {
     "@inkwell/document-ai": "workspace:*",

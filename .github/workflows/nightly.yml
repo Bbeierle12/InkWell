@@ -15,6 +15,7 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @inkwell/e2e exec playwright install --with-deps chromium
       - run: pnpm turbo test:e2e
       - run: pnpm turbo test:fuzz
       - uses: actions/upload-artifact@v4
