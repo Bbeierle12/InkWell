@@ -20,6 +20,14 @@ pub struct AppState {
     pub llm: Arc<LlamaEngine>,
     pub stt: Arc<WhisperEngine>,
     pub pending_file: Arc<Mutex<Option<String>>>,
+    pub auth_pkce: Arc<Mutex<Option<OAuthPkceSession>>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct OAuthPkceSession {
+    pub state: String,
+    pub code_verifier: String,
+    pub created_at_epoch_ms: u64,
 }
 
 /// Parse a deep-link URL into a file path.
@@ -40,6 +48,17 @@ pub fn parse_deep_link_path(url_str: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// Check whether a deep-link URL is an auth callback URL.
+pub fn is_auth_callback_url(url_str: &str) -> bool {
+    let parsed = match url::Url::parse(url_str) {
+        Ok(url) => url,
+        Err(_) => return false,
+    };
+    parsed.scheme() == "inkwell"
+        && parsed.host_str() == Some("auth")
+        && parsed.path() == "/callback"
 }
 
 /// Create the default `AppState` with appropriate backends.
@@ -78,6 +97,7 @@ fn create_app_state() -> AppState {
         llm,
         stt,
         pending_file: Arc::new(Mutex::new(None)),
+        auth_pkce: Arc::new(Mutex::new(None)),
     }
 }
 
@@ -85,7 +105,9 @@ fn create_app_state() -> AppState {
 mod app {
     use super::*;
     use bridge::commands;
-    use tauri::{Emitter, Listener, RunEvent};
+    use tauri::{Emitter, Listener};
+    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    use tauri::RunEvent;
 
     /// Run the Tauri application.
     pub fn run() {
@@ -126,6 +148,15 @@ mod app {
                 commands::check_models_status,
                 commands::download_model,
                 commands::get_pending_file,
+                commands::secure_get_claude_api_key,
+                commands::secure_set_claude_api_key,
+                commands::secure_clear_claude_api_key,
+                commands::auth_get_claude_status,
+                commands::auth_start_claude_sign_in,
+                commands::auth_complete_claude_sign_in,
+                commands::auth_refresh_claude_token,
+                commands::auth_sign_out_claude,
+                commands::auth_invoke_claude_messages,
             ])
             .setup(|app| {
                 // Deep-link handler: inkwell://open?path=...
@@ -137,6 +168,8 @@ mod app {
                         for url_str in urls {
                             if let Some(path) = parse_deep_link_path(&url_str) {
                                 let _ = app_handle.emit("file-open-request", path);
+                            } else if is_auth_callback_url(&url_str) {
+                                let _ = app_handle.emit("auth-callback-url", url_str);
                             }
                         }
                     }
@@ -226,5 +259,20 @@ mod lib_tests {
     fn test_parse_deep_link_path_invalid_url() {
         let result = parse_deep_link_path("not a url at all");
         assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_is_auth_callback_url_valid() {
+        assert!(is_auth_callback_url("inkwell://auth/callback?code=abc&state=xyz"));
+    }
+
+    #[test]
+    fn test_is_auth_callback_url_invalid_scheme() {
+        assert!(!is_auth_callback_url("https://auth/callback?code=abc"));
+    }
+
+    #[test]
+    fn test_is_auth_callback_url_invalid_host() {
+        assert!(!is_auth_callback_url("inkwell://open/callback?code=abc"));
     }
 }

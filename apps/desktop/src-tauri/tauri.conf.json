@@ -3,6 +3,8 @@
   "version": "0.0.1",
   "identifier": "com.inkwell.desktop",
   "build": {
+    "beforeDevCommand": "pnpm --filter @inkwell/web run dev --port 3004",
+    "beforeBuildCommand": "pnpm --filter @inkwell/web run build",
     "devUrl": "http://localhost:3004",
     "frontendDist": "../../web/out"
   },

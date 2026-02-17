@@ -3,12 +3,19 @@
 //! These commands are exposed to the JS frontend via `tauri::command`.
 //! They handle serialization, validation, and delegation to the inference engines.
 
+use base64::Engine as _;
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::path::{Component, Path};
 use tauri::{Emitter, State};
 
 use crate::AppState;
 use crate::inference::{GenerationParams, InferenceError};
+
+const CLAUDE_KEYRING_SERVICE: &str = "com.inkwell.desktop";
+const CLAUDE_KEYRING_ACCOUNT: &str = "claude_api_key";
+const CLAUDE_OAUTH_KEYRING_ACCOUNT: &str = "claude_oauth_token_set";
 
 /// Request payload for local inference.
 #[derive(Debug, Clone, Deserialize)]
@@ -752,6 +759,629 @@ pub async fn get_pending_file(
 ) -> Result<Option<String>, String> {
     let mut pending = state.pending_file.lock().map_err(|e| e.to_string())?;
     Ok(pending.take())
+}
+
+fn claude_keyring_entry() -> Result<keyring::Entry, String> {
+    keyring::Entry::new(CLAUDE_KEYRING_SERVICE, CLAUDE_KEYRING_ACCOUNT)
+        .map_err(|e| format!("Failed to initialize secure credential storage: {}", e))
+}
+
+/// Get Claude API key from secure OS credential storage.
+#[tauri::command]
+pub async fn secure_get_claude_api_key() -> Result<Option<String>, String> {
+    let entry = claude_keyring_entry()?;
+    match entry.get_password() {
+        Ok(api_key) => Ok(Some(api_key)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(format!("Failed to read Claude API key from secure storage: {}", e)),
+    }
+}
+
+/// Store Claude API key in secure OS credential storage.
+#[tauri::command]
+pub async fn secure_set_claude_api_key(api_key: String) -> Result<(), String> {
+    let trimmed = api_key.trim();
+    if trimmed.is_empty() {
+        return Err("Claude API key cannot be empty".to_string());
+    }
+
+    let entry = claude_keyring_entry()?;
+    entry
+        .set_password(trimmed)
+        .map_err(|e| format!("Failed to store Claude API key in secure storage: {}", e))
+}
+
+/// Remove Claude API key from secure OS credential storage.
+#[tauri::command]
+pub async fn secure_clear_claude_api_key() -> Result<(), String> {
+    let entry = claude_keyring_entry()?;
+    match entry.delete_credential() {
+        Ok(_) => Ok(()),
+        Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(format!(
+            "Failed to clear Claude API key from secure storage: {}",
+            e
+        )),
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ClaudeOAuthConfig {
+    enabled: bool,
+    auth_url: String,
+    token_url: String,
+    revoke_url: Option<String>,
+    api_base_url: String,
+    client_id: String,
+    redirect_uri: String,
+    scope: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct StoredClaudeOAuthTokens {
+    access_token: String,
+    refresh_token: Option<String>,
+    expires_at_epoch_ms: Option<u64>,
+    token_type: Option<String>,
+    scope: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClaudeAuthStatus {
+    pub supported: bool,
+    pub connected: bool,
+    pub method: String,
+    pub can_refresh: bool,
+    pub expires_at_epoch_ms: Option<u64>,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClaudeSignInStartResult {
+    pub started: bool,
+    pub auth_url: Option<String>,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClaudeInvokeRequestMessage {
+    pub role: String,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClaudeInvokeViaSubscriptionRequest {
+    pub model: String,
+    pub messages: Vec<ClaudeInvokeRequestMessage>,
+    pub max_tokens: usize,
+    pub system: Option<String>,
+    pub stop_sequences: Option<Vec<String>>,
+    pub system_cache_control: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ClaudeOAuthTokenResponse {
+    access_token: String,
+    refresh_token: Option<String>,
+    expires_in: Option<u64>,
+    token_type: Option<String>,
+    scope: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ClaudeMessagesResponseBlock {
+    #[serde(rename = "type")]
+    kind: String,
+    text: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ClaudeMessagesResponse {
+    content: Vec<ClaudeMessagesResponseBlock>,
+}
+
+fn now_epoch_ms() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    duration.as_millis() as u64
+}
+
+fn redact_sensitive(message: &str) -> String {
+    message
+        .split_whitespace()
+        .map(|part| {
+            if part.starts_with("sk-ant-") {
+                "sk-ant-[REDACTED]".to_string()
+            } else if part.starts_with("Bearer") {
+                "Bearer [REDACTED]".to_string()
+            } else if part.len() > 24 && part.chars().all(|c| c.is_ascii_alphanumeric() || "-._~+/=".contains(c)) {
+                "[REDACTED]".to_string()
+            } else {
+                part.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn oauth_entry() -> Result<keyring::Entry, String> {
+    keyring::Entry::new(CLAUDE_KEYRING_SERVICE, CLAUDE_OAUTH_KEYRING_ACCOUNT)
+        .map_err(|e| format!("Failed to initialize OAuth credential storage: {}", e))
+}
+
+fn load_oauth_config() -> ClaudeOAuthConfig {
+    let enabled = std::env::var("INKWELL_CLAUDE_OAUTH_ENABLED")
+        .ok()
+        .map(|v| v.eq_ignore_ascii_case("true") || v == "1")
+        .unwrap_or(false);
+
+    ClaudeOAuthConfig {
+        enabled,
+        auth_url: std::env::var("INKWELL_CLAUDE_OAUTH_AUTH_URL")
+            .unwrap_or_else(|_| "https://claude.ai/oauth/authorize".to_string()),
+        token_url: std::env::var("INKWELL_CLAUDE_OAUTH_TOKEN_URL")
+            .unwrap_or_else(|_| "https://claude.ai/oauth/token".to_string()),
+        revoke_url: std::env::var("INKWELL_CLAUDE_OAUTH_REVOKE_URL").ok(),
+        api_base_url: std::env::var("INKWELL_CLAUDE_OAUTH_API_BASE_URL")
+            .unwrap_or_else(|_| "https://api.anthropic.com".to_string()),
+        client_id: std::env::var("INKWELL_CLAUDE_OAUTH_CLIENT_ID").unwrap_or_default(),
+        redirect_uri: std::env::var("INKWELL_CLAUDE_OAUTH_REDIRECT_URI")
+            .unwrap_or_else(|_| "inkwell://auth/callback".to_string()),
+        scope: std::env::var("INKWELL_CLAUDE_OAUTH_SCOPE")
+            .unwrap_or_else(|_| "openid profile offline_access".to_string()),
+    }
+}
+
+fn load_stored_oauth_tokens() -> Result<Option<StoredClaudeOAuthTokens>, String> {
+    let entry = oauth_entry()?;
+    match entry.get_password() {
+        Ok(raw) => serde_json::from_str::<StoredClaudeOAuthTokens>(&raw)
+            .map(Some)
+            .map_err(|e| format!("Invalid stored OAuth token payload: {}", e)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(format!("Failed to read OAuth tokens: {}", e)),
+    }
+}
+
+fn save_stored_oauth_tokens(tokens: &StoredClaudeOAuthTokens) -> Result<(), String> {
+    let entry = oauth_entry()?;
+    let payload = serde_json::to_string(tokens)
+        .map_err(|e| format!("Failed to serialize OAuth tokens: {}", e))?;
+    entry
+        .set_password(&payload)
+        .map_err(|e| format!("Failed to store OAuth tokens: {}", e))
+}
+
+fn clear_stored_oauth_tokens() -> Result<(), String> {
+    let entry = oauth_entry()?;
+    match entry.delete_credential() {
+        Ok(_) => Ok(()),
+        Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(format!("Failed to clear OAuth tokens: {}", e)),
+    }
+}
+
+fn create_pkce_verifier() -> String {
+    let mut bytes = [0_u8; 32];
+    rand::thread_rng().fill_bytes(&mut bytes);
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
+}
+
+fn create_pkce_challenge(verifier: &str) -> String {
+    let digest = Sha256::digest(verifier.as_bytes());
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(digest)
+}
+
+fn is_token_expired(expires_at_epoch_ms: Option<u64>) -> bool {
+    match expires_at_epoch_ms {
+        Some(expiry) => now_epoch_ms().saturating_add(30_000) >= expiry,
+        None => false,
+    }
+}
+
+fn parse_oauth_callback(callback_url: &str) -> Result<(String, String), String> {
+    let url = url::Url::parse(callback_url)
+        .map_err(|e| format!("Invalid callback URL: {}", e))?;
+
+    let mut code: Option<String> = None;
+    let mut state: Option<String> = None;
+    for (k, v) in url.query_pairs() {
+        if k == "code" {
+            code = Some(v.to_string());
+        } else if k == "state" {
+            state = Some(v.to_string());
+        }
+    }
+
+    match (code, state) {
+        (Some(c), Some(s)) if !c.is_empty() && !s.is_empty() => Ok((c, s)),
+        _ => Err("OAuth callback is missing code/state".to_string()),
+    }
+}
+
+async fn exchange_authorization_code(
+    config: &ClaudeOAuthConfig,
+    code: &str,
+    verifier: &str,
+) -> Result<StoredClaudeOAuthTokens, String> {
+    let client = reqwest::Client::new();
+    let params = [
+        ("grant_type", "authorization_code"),
+        ("client_id", config.client_id.as_str()),
+        ("code", code),
+        ("redirect_uri", config.redirect_uri.as_str()),
+        ("code_verifier", verifier),
+    ];
+
+    let response = client
+        .post(&config.token_url)
+        .form(&params)
+        .send()
+        .await
+        .map_err(|e| format!("Token exchange failed: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!(
+            "Token exchange failed with HTTP {}: {}",
+            status,
+            redact_sensitive(&text),
+        ));
+    }
+
+    let parsed = response
+        .json::<ClaudeOAuthTokenResponse>()
+        .await
+        .map_err(|e| format!("Token exchange response parse failed: {}", e))?;
+
+    let expiry = parsed
+        .expires_in
+        .map(|seconds| now_epoch_ms().saturating_add(seconds.saturating_mul(1000)));
+
+    Ok(StoredClaudeOAuthTokens {
+        access_token: parsed.access_token,
+        refresh_token: parsed.refresh_token,
+        expires_at_epoch_ms: expiry,
+        token_type: parsed.token_type,
+        scope: parsed.scope,
+    })
+}
+
+async fn refresh_access_token(
+    config: &ClaudeOAuthConfig,
+    refresh_token: &str,
+) -> Result<StoredClaudeOAuthTokens, String> {
+    let client = reqwest::Client::new();
+    let params = [
+        ("grant_type", "refresh_token"),
+        ("client_id", config.client_id.as_str()),
+        ("refresh_token", refresh_token),
+    ];
+
+    let response = client
+        .post(&config.token_url)
+        .form(&params)
+        .send()
+        .await
+        .map_err(|e| format!("Token refresh failed: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!(
+            "Token refresh failed with HTTP {}: {}",
+            status,
+            redact_sensitive(&text),
+        ));
+    }
+
+    let parsed = response
+        .json::<ClaudeOAuthTokenResponse>()
+        .await
+        .map_err(|e| format!("Token refresh response parse failed: {}", e))?;
+
+    let expiry = parsed
+        .expires_in
+        .map(|seconds| now_epoch_ms().saturating_add(seconds.saturating_mul(1000)));
+
+    Ok(StoredClaudeOAuthTokens {
+        access_token: parsed.access_token,
+        refresh_token: parsed.refresh_token.or_else(|| Some(refresh_token.to_string())),
+        expires_at_epoch_ms: expiry,
+        token_type: parsed.token_type,
+        scope: parsed.scope,
+    })
+}
+
+async fn current_claude_auth_status() -> ClaudeAuthStatus {
+    let config = load_oauth_config();
+    if !config.enabled || config.client_id.trim().is_empty() {
+        return ClaudeAuthStatus {
+            supported: false,
+            connected: false,
+            method: "claude_subscription".to_string(),
+            can_refresh: false,
+            expires_at_epoch_ms: None,
+            message: Some("Claude subscription sign-in is disabled in this build.".to_string()),
+        };
+    }
+
+    match load_stored_oauth_tokens() {
+        Ok(Some(tokens)) => ClaudeAuthStatus {
+            supported: true,
+            connected: !tokens.access_token.is_empty() && !is_token_expired(tokens.expires_at_epoch_ms),
+            method: "claude_subscription".to_string(),
+            can_refresh: tokens.refresh_token.is_some(),
+            expires_at_epoch_ms: tokens.expires_at_epoch_ms,
+            message: None,
+        },
+        Ok(None) => ClaudeAuthStatus {
+            supported: true,
+            connected: false,
+            method: "claude_subscription".to_string(),
+            can_refresh: false,
+            expires_at_epoch_ms: None,
+            message: None,
+        },
+        Err(e) => ClaudeAuthStatus {
+            supported: true,
+            connected: false,
+            method: "claude_subscription".to_string(),
+            can_refresh: false,
+            expires_at_epoch_ms: None,
+            message: Some(redact_sensitive(&e)),
+        },
+    }
+}
+
+/// Get current Claude account auth status.
+#[tauri::command]
+pub async fn auth_get_claude_status() -> Result<ClaudeAuthStatus, String> {
+    Ok(current_claude_auth_status().await)
+}
+
+/// Start Claude subscription sign-in using OAuth PKCE in the system browser.
+#[tauri::command]
+pub async fn auth_start_claude_sign_in(
+    state: State<'_, AppState>,
+) -> Result<ClaudeSignInStartResult, String> {
+    let config = load_oauth_config();
+    if !config.enabled || config.client_id.trim().is_empty() {
+        return Ok(ClaudeSignInStartResult {
+            started: false,
+            auth_url: None,
+            message: Some("Claude sign-in is not enabled for this build.".to_string()),
+        });
+    }
+
+    let code_verifier = create_pkce_verifier();
+    let code_challenge = create_pkce_challenge(&code_verifier);
+    let oauth_state = create_pkce_verifier();
+
+    {
+        let mut session = state.auth_pkce.lock().map_err(|e| e.to_string())?;
+        *session = Some(crate::OAuthPkceSession {
+            state: oauth_state.clone(),
+            code_verifier: code_verifier.clone(),
+            created_at_epoch_ms: now_epoch_ms(),
+        });
+    }
+
+    let mut auth_url = url::Url::parse(&config.auth_url)
+        .map_err(|e| format!("Invalid OAuth auth URL: {}", e))?;
+    auth_url.query_pairs_mut()
+        .append_pair("response_type", "code")
+        .append_pair("client_id", &config.client_id)
+        .append_pair("redirect_uri", &config.redirect_uri)
+        .append_pair("scope", &config.scope)
+        .append_pair("code_challenge", &code_challenge)
+        .append_pair("code_challenge_method", "S256")
+        .append_pair("state", &oauth_state);
+
+    webbrowser::open(auth_url.as_str())
+        .map_err(|e| format!("Failed to open browser for sign-in: {}", redact_sensitive(&e.to_string())))?;
+
+    Ok(ClaudeSignInStartResult {
+        started: true,
+        auth_url: Some(auth_url.to_string()),
+        message: Some("Browser opened for Claude sign-in.".to_string()),
+    })
+}
+
+/// Complete Claude sign-in using OAuth callback URL from deep-link event.
+#[tauri::command]
+pub async fn auth_complete_claude_sign_in(
+    state: State<'_, AppState>,
+    callback_url: String,
+) -> Result<ClaudeAuthStatus, String> {
+    let config = load_oauth_config();
+    if !config.enabled || config.client_id.trim().is_empty() {
+        return Ok(current_claude_auth_status().await);
+    }
+
+    let (code, returned_state) = parse_oauth_callback(&callback_url)
+        .map_err(|e| redact_sensitive(&e))?;
+
+    let session = {
+        let mut pkce = state.auth_pkce.lock().map_err(|e| e.to_string())?;
+        pkce.take()
+    };
+
+    let session = session.ok_or_else(|| "No OAuth sign-in session is pending.".to_string())?;
+    if session.state != returned_state {
+        return Err("OAuth state mismatch in callback.".to_string());
+    }
+
+    let tokens = exchange_authorization_code(&config, &code, &session.code_verifier)
+        .await
+        .map_err(|e| redact_sensitive(&e))?;
+    save_stored_oauth_tokens(&tokens).map_err(|e| redact_sensitive(&e))?;
+
+    Ok(current_claude_auth_status().await)
+}
+
+/// Refresh Claude OAuth access token.
+#[tauri::command]
+pub async fn auth_refresh_claude_token() -> Result<ClaudeAuthStatus, String> {
+    let config = load_oauth_config();
+    let tokens = load_stored_oauth_tokens()
+        .map_err(|e| redact_sensitive(&e))?
+        .ok_or_else(|| "No stored OAuth token set found.".to_string())?;
+
+    let refresh = tokens
+        .refresh_token
+        .as_deref()
+        .ok_or_else(|| "No refresh token available.".to_string())?;
+
+    let refreshed = refresh_access_token(&config, refresh)
+        .await
+        .map_err(|e| redact_sensitive(&e))?;
+    save_stored_oauth_tokens(&refreshed).map_err(|e| redact_sensitive(&e))?;
+
+    Ok(current_claude_auth_status().await)
+}
+
+/// Sign out Claude OAuth session and clear secure token storage.
+#[tauri::command]
+pub async fn auth_sign_out_claude(
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let config = load_oauth_config();
+
+    if let Ok(Some(tokens)) = load_stored_oauth_tokens() {
+        if let (Some(revoke_url), access_token) = (config.revoke_url.as_deref(), tokens.access_token) {
+            let client = reqwest::Client::new();
+            let _ = client
+                .post(revoke_url)
+                .form(&[
+                    ("token", access_token.as_str()),
+                    ("client_id", config.client_id.as_str()),
+                ])
+                .send()
+                .await;
+        }
+    }
+
+    clear_stored_oauth_tokens().map_err(|e| redact_sensitive(&e))?;
+
+    let mut session = state.auth_pkce.lock().map_err(|e| e.to_string())?;
+    *session = None;
+    Ok(())
+}
+
+async fn resolve_valid_access_token(
+    config: &ClaudeOAuthConfig,
+) -> Result<String, String> {
+    let mut tokens = load_stored_oauth_tokens()?
+        .ok_or_else(|| "No connected Claude account session.".to_string())?;
+
+    if is_token_expired(tokens.expires_at_epoch_ms) {
+        let refresh = tokens
+            .refresh_token
+            .clone()
+            .ok_or_else(|| "Access token expired and no refresh token is available.".to_string())?;
+        tokens = refresh_access_token(config, &refresh).await?;
+        save_stored_oauth_tokens(&tokens)?;
+    }
+
+    Ok(tokens.access_token)
+}
+
+/// Invoke Claude messages via desktop OAuth token transport.
+#[tauri::command]
+pub async fn auth_invoke_claude_messages(
+    request: ClaudeInvokeViaSubscriptionRequest,
+) -> Result<String, String> {
+    let config = load_oauth_config();
+    if !config.enabled || config.client_id.trim().is_empty() {
+        return Err("Claude OAuth transport is disabled.".to_string());
+    }
+
+    let access_token = resolve_valid_access_token(&config)
+        .await
+        .map_err(|e| redact_sensitive(&e))?;
+
+    let mut body = serde_json::json!({
+        "model": request.model,
+        "messages": request.messages,
+        "max_tokens": request.max_tokens,
+        "stream": false
+    });
+
+    if let Some(system) = request.system {
+        if request.system_cache_control.unwrap_or(false) {
+            body["system"] = serde_json::json!([
+                {
+                    "type": "text",
+                    "text": system,
+                    "cache_control": { "type": "ephemeral" }
+                }
+            ]);
+        } else {
+            body["system"] = serde_json::json!(system);
+        }
+    }
+
+    if let Some(stop_sequences) = request.stop_sequences {
+        body["stop_sequences"] = serde_json::json!(stop_sequences);
+    }
+
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        reqwest::header::CONTENT_TYPE,
+        reqwest::header::HeaderValue::from_static("application/json"),
+    );
+    headers.insert(
+        reqwest::header::AUTHORIZATION,
+        reqwest::header::HeaderValue::from_str(&format!("Bearer {}", access_token))
+            .map_err(|e| e.to_string())?,
+    );
+    headers.insert(
+        "anthropic-version",
+        reqwest::header::HeaderValue::from_static("2023-06-01"),
+    );
+    if request.system_cache_control.unwrap_or(false) {
+        headers.insert(
+            "anthropic-beta",
+            reqwest::header::HeaderValue::from_static("prompt-caching-2024-07-31"),
+        );
+    }
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(format!("{}/v1/messages", config.api_base_url.trim_end_matches('/')))
+        .headers(headers)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Claude invoke failed: {}", redact_sensitive(&e.to_string())))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let text = response.text().await.unwrap_or_default();
+        return Err(format!(
+            "Claude invoke failed with HTTP {}: {}",
+            status,
+            redact_sensitive(&text),
+        ));
+    }
+
+    let parsed = response
+        .json::<ClaudeMessagesResponse>()
+        .await
+        .map_err(|e| format!("Claude response parse failed: {}", redact_sensitive(&e.to_string())))?;
+
+    let text = parsed
+        .content
+        .iter()
+        .filter(|block| block.kind == "text")
+        .filter_map(|block| block.text.as_deref())
+        .collect::<String>();
+
+    Ok(text)
 }
 
 /// Simple GPU detection heuristic.

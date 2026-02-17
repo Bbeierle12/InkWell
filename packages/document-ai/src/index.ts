@@ -17,7 +17,13 @@ export { ClaudeClient } from './claude/client';
 export { parseAIResponse, collectAndParse } from './claude/response-parser';
 export { estimateTokens, countTokens } from './claude/token-counter';
 export { DocumentAIServiceImpl } from './service';
-export type { DocumentAIServiceOptions, AIOperationRequest, AIOperationResult } from './service';
+export type {
+  DocumentAIServiceOptions,
+  AIOperationRequest,
+  AIOperationResult,
+  CloudStreamProvider,
+  CloudStreamRequest,
+} from './service';
 export { getPromptTemplate, renderPrompt } from './prompts';
 export type { PromptTemplate } from './prompts';
 export type { DocumentAIService, LocalInferenceProvider } from './types';

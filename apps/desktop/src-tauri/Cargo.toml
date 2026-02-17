@@ -33,9 +33,14 @@ encoding_rs = "0.8"
 whisper-rs = { version = "0.15", optional = true }
 rfd = "0.15"
 dirs = "5"
-reqwest = { version = "0.12", features = ["stream"] }
+reqwest = { version = "0.12", features = ["stream", "json"] }
 futures-util = "0.3"
 url = "2"
+keyring = "3"
+base64 = "0.22"
+rand = "0.8"
+sha2 = "0.10"
+webbrowser = "1"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

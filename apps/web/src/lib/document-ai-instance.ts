@@ -13,6 +13,11 @@ import {
   streamLocalInference,
 } from './tauri-bridge';
 import { useSettingsStore } from './settings-store';
+import {
+  getMissingClaudeApiKeyMessage,
+  resolveClaudeAuth,
+} from './ai-auth';
+import { streamClaudeViaSubscription } from './claude-subscription-provider';
 
 let instance: DocumentAIServiceImpl | null = null;
 
@@ -54,19 +59,26 @@ function createTauriLocalProvider(): LocalInferenceProvider | undefined {
  */
 export function getDocumentAI(): DocumentAIServiceImpl {
   if (!instance) {
-    const settingsKey = useSettingsStore.getState().claudeApiKey;
-    const apiKey = settingsKey || process.env.NEXT_PUBLIC_CLAUDE_API_KEY;
-    if (!apiKey) {
-      throw new Error(
-        'Claude API key is not configured. ' +
-        'Set it in Settings > AI, or create a .env.local file in apps/web/ with:\n' +
-        'NEXT_PUBLIC_CLAUDE_API_KEY=sk-ant-...',
-      );
+    const settings = useSettingsStore.getState();
+
+    const auth = resolveClaudeAuth({
+      preferredMethod: settings.aiAuthMethod,
+      subscriptionSupported: settings.claudeSubscriptionSupported,
+      subscriptionConnected: settings.claudeSubscriptionConnected,
+      settingsApiKey: settings.claudeApiKey,
+      envApiKey: process.env.NEXT_PUBLIC_CLAUDE_API_KEY,
+    });
+
+    if (!auth) {
+      throw new Error(getMissingClaudeApiKeyMessage());
     }
 
     instance = new DocumentAIServiceImpl({
-      apiKey,
+      apiKey: auth.method === 'api_key' ? auth.apiKey : '__subscription_transport__',
       localProvider: createTauriLocalProvider(),
+      cloudStreamProvider: auth.method === 'claude_subscription'
+        ? streamClaudeViaSubscription
+        : undefined,
     });
   }
   return instance;

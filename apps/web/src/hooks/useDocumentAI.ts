@@ -13,6 +13,7 @@ import { OperationType } from '@inkwell/shared';
 import { DiffPreviewPluginKey, AIOperationSession, clampPosition } from '@inkwell/editor';
 import { getDocumentAI, destroyDocumentAI } from '../lib/document-ai-instance';
 import { useDocumentStore } from '../lib/document-store';
+import { useSettingsStore } from '../lib/settings-store';
 
 interface UseDocumentAIOptions {
   editor: Editor | null;
@@ -34,6 +35,9 @@ export function useDocumentAI({ editor }: UseDocumentAIOptions) {
   const [lastError, setLastError] = useState<string | null>(null);
   const sessionRef = useRef<AIOperationSession | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const claudeApiKey = useSettingsStore((s) => s.claudeApiKey);
+  const aiAuthMethod = useSettingsStore((s) => s.aiAuthMethod);
+  const claudeSubscriptionConnected = useSettingsStore((s) => s.claudeSubscriptionConnected);
   // Track the last failed operation for retry
   const lastOpRef = useRef<{ operation: OperationType; args?: string } | null>(null);
 
@@ -48,7 +52,7 @@ export function useDocumentAI({ editor }: UseDocumentAIOptions) {
     return () => {
       destroyDocumentAI();
     };
-  }, []);
+  }, [claudeApiKey, aiAuthMethod, claudeSubscriptionConnected]);
 
   // Track online/offline status and abort in-flight requests on disconnect
   useEffect(() => {

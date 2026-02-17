@@ -20,13 +20,26 @@ import type {
   EditorFontFamily,
   EditorFontSize,
   EditorWidth,
-  RoutingModeOption,
+  AIAuthMethod,
   GhostTextDelay,
   AutoSaveInterval,
 } from '@/lib/settings-store';
 import { useDocumentStore } from '@/lib/document-store';
 import { editorJsonToMarkdown } from '@/lib/markdown-export';
 import { destroyDocumentAI } from '@/lib/document-ai-instance';
+import { saveClaudeApiKeyToSecureStorage } from '@/lib/claude-key-storage';
+import {
+  completeClaudeSubscriptionSignIn,
+  getClaudeAuthStatus,
+  isTauriEnvironment,
+  onClaudeAuthCallback,
+  signOutClaudeSubscription,
+  startClaudeSubscriptionSignIn,
+} from '@/lib/tauri-bridge';
+import {
+  CLAUDE_SUBSCRIPTION_SIGNIN_SUPPORTED,
+  sanitizeAuthErrorMessage,
+} from '@/lib/ai-auth';
 
 type TabId = 'appearance' | 'editor' | 'ai' | 'data' | 'about';
 
@@ -292,35 +305,196 @@ function EditorTab() {
 // ── AI Tab ──
 
 function AITab() {
-  const {
-    claudeApiKey, setClaudeApiKey,
-    routingMode, setRoutingMode,
-    ghostTextEnabled, setGhostTextEnabled,
-    ghostTextDebounceMs, setGhostTextDebounceMs,
-  } = useSettingsStore();
+  const aiAuthMethod = useSettingsStore((s) => s.aiAuthMethod);
+  const setAiAuthMethod = useSettingsStore((s) => s.setAiAuthMethod);
+  const claudeApiKey = useSettingsStore((s) => (typeof s.claudeApiKey === 'string' ? s.claudeApiKey : ''));
+  const setClaudeApiKey = useSettingsStore((s) => s.setClaudeApiKey);
+  const claudeSubscriptionSupported = useSettingsStore((s) => s.claudeSubscriptionSupported);
+  const claudeSubscriptionConnected = useSettingsStore((s) => s.claudeSubscriptionConnected);
+  const setClaudeSubscriptionStatus = useSettingsStore((s) => s.setClaudeSubscriptionStatus);
+  const ghostTextEnabled = useSettingsStore((s) => Boolean(s.ghostTextEnabled));
+  const setGhostTextEnabled = useSettingsStore((s) => s.setGhostTextEnabled);
+  const ghostTextDebounceMs = useSettingsStore((s) =>
+    s.ghostTextDebounceMs === 300 || s.ghostTextDebounceMs === 500 || s.ghostTextDebounceMs === 800
+      ? s.ghostTextDebounceMs
+      : 500,
+  );
+  const setGhostTextDebounceMs = useSettingsStore((s) => s.setGhostTextDebounceMs);
 
-  const [localKey, setLocalKey] = useState(claudeApiKey);
+  const [localKey, setLocalKey] = useState<string>(claudeApiKey);
   const [showKey, setShowKey] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const keyChanged = localKey !== claudeApiKey;
 
-  const handleSaveKey = useCallback(() => {
-    setClaudeApiKey(localKey);
-    // Re-initialize the AI service with the new key
-    destroyDocumentAI();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const authStateLabel = !claudeSubscriptionSupported
+    ? 'Unsupported'
+    : claudeSubscriptionConnected
+      ? 'Connected'
+      : 'Disconnected';
+
+  useEffect(() => {
+    setLocalKey(claudeApiKey);
+  }, [claudeApiKey]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isTauriEnvironment()) return;
+    let mounted = true;
+    let unlisten: (() => void) | null = null;
+
+    async function syncAuthStatus() {
+      const status = await getClaudeAuthStatus();
+      if (!mounted || !status) return;
+      setClaudeSubscriptionStatus({
+        supported: status.supported && CLAUDE_SUBSCRIPTION_SIGNIN_SUPPORTED,
+        connected: status.connected,
+      });
+      if (status.message) {
+        setAuthMessage(sanitizeAuthErrorMessage(status.message));
+      }
+    }
+
+    void syncAuthStatus();
+
+    void onClaudeAuthCallback(async (callbackUrl) => {
+      setAuthBusy(true);
+      try {
+        const status = await completeClaudeSubscriptionSignIn(callbackUrl);
+        if (!status) {
+          setAuthMessage('Claude sign-in callback could not be completed.');
+          return;
+        }
+        setClaudeSubscriptionStatus({
+          supported: status.supported && CLAUDE_SUBSCRIPTION_SIGNIN_SUPPORTED,
+          connected: status.connected,
+        });
+        setAuthMessage(status.message ? sanitizeAuthErrorMessage(status.message) : null);
+        if (status.connected) {
+          setAiAuthMethod('claude_subscription');
+          destroyDocumentAI();
+        }
+      } finally {
+        setAuthBusy(false);
+      }
+    }).then((listener) => {
+      unlisten = listener;
+    });
+
+    return () => {
+      mounted = false;
+      if (unlisten) unlisten();
+    };
+  }, [setAiAuthMethod, setClaudeSubscriptionStatus]);
+
+  const handleSaveKey = useCallback(async () => {
+    const trimmed = localKey.trim();
+    setSaveError(null);
+    setSaving(true);
+
+    try {
+      if (isTauriEnvironment()) {
+        const persisted = await saveClaudeApiKeyToSecureStorage(trimmed);
+        if (!persisted) {
+          setSaveError('Failed to update secure API key storage.');
+          return;
+        }
+      }
+
+      setClaudeApiKey(trimmed);
+      // Re-initialize the AI service with the new key
+      destroyDocumentAI();
+      setSaved(true);
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+      saveTimerRef.current = setTimeout(() => setSaved(false), 2000);
+    } finally {
+      setSaving(false);
+    }
   }, [localKey, setClaudeApiKey]);
+
+  const handleConnectClaude = useCallback(async () => {
+    if (!isTauriEnvironment()) return;
+    setAuthBusy(true);
+    setAuthMessage(null);
+    try {
+      const started = await startClaudeSubscriptionSignIn();
+      if (!started?.started) {
+        setAuthMessage(
+          sanitizeAuthErrorMessage(started?.message ?? 'Claude account sign-in is unavailable.'),
+        );
+      } else if (started.message) {
+        setAuthMessage(sanitizeAuthErrorMessage(started.message));
+      }
+    } finally {
+      setAuthBusy(false);
+    }
+  }, []);
+
+  const handleDisconnectClaude = useCallback(async () => {
+    setAuthBusy(true);
+    try {
+      const ok = await signOutClaudeSubscription();
+      if (!ok) {
+        setAuthMessage('Unable to disconnect Claude account.');
+        return;
+      }
+      setClaudeSubscriptionStatus({ supported: claudeSubscriptionSupported, connected: false });
+      if (aiAuthMethod === 'claude_subscription') {
+        setAiAuthMethod('api_key');
+      }
+      destroyDocumentAI();
+      setAuthMessage('Claude account disconnected.');
+    } finally {
+      setAuthBusy(false);
+    }
+  }, [aiAuthMethod, claudeSubscriptionSupported, setAiAuthMethod, setClaudeSubscriptionStatus]);
 
   return (
     <>
       <div className="inkwell-settings-section">
         <div className="inkwell-settings-section-title">API Configuration</div>
 
+        <div className="inkwell-setting-row">
+          <div>
+            <div className="inkwell-setting-label">Auth method</div>
+            <div className="inkwell-setting-desc">Choose how Claude requests are authenticated.</div>
+          </div>
+          <select
+            className="inkwell-setting-select"
+            value={aiAuthMethod}
+            onChange={(e) => {
+              const method = e.target.value as AIAuthMethod;
+              setAiAuthMethod(method);
+              destroyDocumentAI();
+            }}
+          >
+            <option value="api_key">API Key</option>
+            <option
+              value="claude_subscription"
+              disabled={!claudeSubscriptionSupported || !claudeSubscriptionConnected}
+            >
+              Claude Account
+            </option>
+          </select>
+        </div>
+
         <div style={{ marginBottom: '0.75rem' }}>
           <div className="inkwell-setting-label" style={{ marginBottom: '0.375rem' }}>Claude API Key</div>
           <div className="inkwell-setting-desc" style={{ marginBottom: '0.5rem' }}>
-            Overrides the NEXT_PUBLIC_CLAUDE_API_KEY environment variable
+            Inkwell uses Anthropic API access. This overrides the NEXT_PUBLIC_CLAUDE_API_KEY environment variable.
           </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <input
@@ -340,30 +514,57 @@ function AITab() {
             </button>
             <button
               className="inkwell-btn-primary"
-              onClick={handleSaveKey}
-              disabled={!keyChanged}
+              onClick={() => {
+                void handleSaveKey();
+              }}
+              disabled={!keyChanged || saving}
               style={{ whiteSpace: 'nowrap' }}
             >
-              {saved ? 'Saved' : 'Save'}
+              {saving ? 'Saving...' : saved ? 'Saved' : 'Save'}
             </button>
           </div>
+          {saveError && (
+            <div className="inkwell-setting-desc" style={{ color: '#dc2626', marginTop: '0.5rem' }}>
+              {saveError}
+            </div>
+          )}
         </div>
 
         <div className="inkwell-setting-row">
           <div>
-            <div className="inkwell-setting-label">Routing mode</div>
-            <div className="inkwell-setting-desc">How AI operations are routed between local and cloud models</div>
+            <div className="inkwell-setting-label">Claude account sign-in</div>
+            <div className="inkwell-setting-desc">
+              State: {authStateLabel}
+              {!claudeSubscriptionSupported && ' — this desktop build has sign-in disabled.'}
+            </div>
           </div>
-          <select
-            className="inkwell-setting-select"
-            value={routingMode}
-            onChange={(e) => setRoutingMode(e.target.value as RoutingModeOption)}
-          >
-            <option value="auto">Auto</option>
-            <option value="local_only">Local Only</option>
-            <option value="cloud_only">Cloud Only</option>
-          </select>
+          {claudeSubscriptionConnected ? (
+            <button
+              className="inkwell-btn-secondary"
+              onClick={() => {
+                void handleDisconnectClaude();
+              }}
+              disabled={authBusy}
+            >
+              Disconnect
+            </button>
+          ) : (
+            <button
+              className="inkwell-btn-secondary"
+              onClick={() => {
+                void handleConnectClaude();
+              }}
+              disabled={authBusy || !claudeSubscriptionSupported}
+            >
+              {authBusy ? 'Connecting...' : 'Connect'}
+            </button>
+          )}
         </div>
+        {authMessage && (
+          <div className="inkwell-setting-desc" style={{ marginTop: '0.5rem' }}>
+            {authMessage}
+          </div>
+        )}
       </div>
 
       <div className="inkwell-settings-section">
@@ -493,7 +694,7 @@ function DataTab() {
 // ── About Tab ──
 
 function AboutTab() {
-  const { resetAll } = useSettingsStore();
+  const { resetAll, setClaudeApiKey } = useSettingsStore();
   const [confirmReset, setConfirmReset] = useState(false);
 
   return (
@@ -563,8 +764,14 @@ function AboutTab() {
               <button
                 className="inkwell-btn-danger"
                 onClick={() => {
-                  resetAll();
-                  setConfirmReset(false);
+                  void (async () => {
+                    if (isTauriEnvironment()) {
+                      await saveClaudeApiKeyToSecureStorage('');
+                    }
+                    setClaudeApiKey('');
+                    resetAll();
+                    setConfirmReset(false);
+                  })();
                 }}
               >
                 Yes, reset

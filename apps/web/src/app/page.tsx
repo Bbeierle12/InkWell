@@ -30,7 +30,11 @@ import { useFileOpen } from '@/hooks/useFileOpen';
 import { useDocumentStore } from '@/lib/document-store';
 import { useSettingsStore, FONT_FAMILY_MAP, FONT_SIZE_MAP, EDITOR_WIDTH_MAP } from '@/lib/settings-store';
 import { deriveTitleFromContent } from '@/lib/document-utils';
-import { isTauriEnvironment, checkModelsStatus } from '@/lib/tauri-bridge';
+import { isTauriEnvironment, checkModelsStatus, getClaudeAuthStatus } from '@/lib/tauri-bridge';
+import {
+  loadClaudeApiKeyFromSecureStorage,
+  migrateLegacyClaudeApiKeyFromLocalStorage,
+} from '@/lib/claude-key-storage';
 
 const defaultCommands: SlashCommandItem[] = [
   { title: 'Rewrite', description: 'Rewrite selection in a new tone', command: 'rewrite' },
@@ -53,6 +57,8 @@ export default function Home() {
   const [setupChecked, setSetupChecked] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { title, setTitle, toggleSidebar } = useDocumentStore();
+  const setClaudeApiKey = useSettingsStore((s) => s.setClaudeApiKey);
+  const setClaudeSubscriptionStatus = useSettingsStore((s) => s.setClaudeSubscriptionStatus);
   const {
     editorFontFamily,
     editorFontSize,
@@ -78,11 +84,36 @@ export default function Home() {
     checkSetup();
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function hydrateClaudeKey() {
+      await migrateLegacyClaudeApiKeyFromLocalStorage();
+      const secureKey = await loadClaudeApiKeyFromSecureStorage();
+      if (!cancelled && secureKey) {
+        setClaudeApiKey(secureKey);
+      }
+      const authStatus = await getClaudeAuthStatus();
+      if (!cancelled && authStatus) {
+        setClaudeSubscriptionStatus({
+          supported: authStatus.supported,
+          connected: authStatus.connected,
+        });
+      }
+    }
+
+    void hydrateClaudeKey();
+    return () => {
+      cancelled = true;
+    };
+  }, [setClaudeApiKey, setClaudeSubscriptionStatus]);
+
   const handleSetupComplete = useCallback(() => {
     setShowSetup(false);
   }, []);
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit,
       Placeholder.configure({

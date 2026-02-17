@@ -21,12 +21,27 @@ import { ClaudeClient } from './claude/client';
 import { collectAndParse } from './claude/response-parser';
 import { getPromptTemplate, renderPrompt } from './prompts';
 
+export interface CloudStreamRequest {
+  model: ModelTarget;
+  messages: Array<{ role: string; content: string }>;
+  maxTokens?: number;
+  signal?: AbortSignal;
+  stopSequences?: string[];
+  system?: string;
+  systemCacheControl?: boolean;
+}
+
+export type CloudStreamProvider = (
+  request: CloudStreamRequest,
+) => AsyncGenerator<string, void, unknown>;
+
 export interface DocumentAIServiceOptions {
   apiKey: string;
   baseUrl?: string;
   isPrivate?: boolean;
   localProvider?: LocalInferenceProvider;
   workspaceRetriever?: WorkspaceRetriever;
+  cloudStreamProvider?: CloudStreamProvider;
 }
 
 export interface AIOperationRequest {
@@ -65,6 +80,7 @@ export class DocumentAIServiceImpl implements DocumentAIService {
   private client: ClaudeClient;
   private isPrivate: boolean;
   private localProvider?: LocalInferenceProvider;
+  private cloudStreamProvider?: CloudStreamProvider;
   private destroyed = false;
 
   constructor(options: DocumentAIServiceOptions) {
@@ -78,6 +94,7 @@ export class DocumentAIServiceImpl implements DocumentAIService {
     });
     this.isPrivate = options.isPrivate ?? false;
     this.localProvider = options.localProvider;
+    this.cloudStreamProvider = options.cloudStreamProvider;
   }
 
   route(operation: OperationType): ModelTarget {
@@ -164,14 +181,21 @@ export class DocumentAIServiceImpl implements DocumentAIService {
     const { system, user } = renderPrompt(template, vars);
 
     // 4. Stream from Claude
-    const stream = this.client.stream(
-      [{ role: 'user', content: user }],
-      {
-        model: routing.target,
-        system,
-        systemCacheControl: true,
-      },
-    );
+    const stream = this.cloudStreamProvider
+      ? this.cloudStreamProvider({
+          model: routing.target,
+          messages: [{ role: 'user', content: user }],
+          system,
+          systemCacheControl: true,
+        })
+      : this.client.stream(
+          [{ role: 'user', content: user }],
+          {
+            model: routing.target,
+            system,
+            systemCacheControl: true,
+          },
+        );
 
     // 5. Collect and parse
     // VoiceRefine returns plain text, not JSON edit instructions
