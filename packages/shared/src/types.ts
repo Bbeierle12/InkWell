@@ -183,6 +183,14 @@ export interface ChatMessage {
 /** Status of the chat streaming connection. */
 export type ChatStreamStatus = 'idle' | 'streaming' | 'error';
 
+/** Information about an Ollama model returned by /api/tags. */
+export interface OllamaModelInfo {
+  name: string;
+  modified_at: string;
+  size: number;
+  digest: string;
+}
+
 /** Context data carried through the voice pipeline. */
 export interface VoicePipelineContext {
   audioBlob: Blob | null;

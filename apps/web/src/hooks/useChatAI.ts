@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { Editor } from '@tiptap/core';
 import { DiffPreviewPluginKey } from '@inkwell/editor';
+import { ClaudeClient, OllamaClient } from '@inkwell/document-ai';
 import { ChatService, extractEditBlocks } from '../lib/chat-service';
 import { useChatStore } from '../lib/chat-store';
 import { useSettingsStore } from '../lib/settings-store';
@@ -31,26 +32,38 @@ function nextId(): string {
 export function useChatAI({ editor, acceptDiff, rejectDiff }: UseChatAIOptions) {
   const serviceRef = useRef<ChatService | null>(null);
   const claudeApiKey = useSettingsStore((s) => s.claudeApiKey);
+  const aiProvider = useSettingsStore((s) => s.aiProvider);
+  const ollamaBaseUrl = useSettingsStore((s) => s.ollamaBaseUrl);
+  const ollamaModel = useSettingsStore((s) => s.ollamaModel);
 
-  // Rebuild service when API key changes
+  // Rebuild service when provider or credentials change
   useEffect(() => {
     serviceRef.current?.destroy();
     serviceRef.current = null;
 
-    const resolved = resolveClaudeApiKey({
-      settingsApiKey: claudeApiKey,
-      envApiKey: process.env.NEXT_PUBLIC_CLAUDE_API_KEY,
-    });
-
-    if (resolved) {
-      serviceRef.current = new ChatService(resolved.apiKey);
+    if (aiProvider === 'ollama') {
+      if (ollamaModel) {
+        serviceRef.current = new ChatService(
+          new OllamaClient({ baseUrl: ollamaBaseUrl, model: ollamaModel }),
+        );
+      }
+    } else {
+      const resolved = resolveClaudeApiKey({
+        settingsApiKey: claudeApiKey,
+        envApiKey: process.env.NEXT_PUBLIC_CLAUDE_API_KEY,
+      });
+      if (resolved) {
+        serviceRef.current = new ChatService(
+          new ClaudeClient({ apiKey: resolved.apiKey }),
+        );
+      }
     }
 
     return () => {
       serviceRef.current?.destroy();
       serviceRef.current = null;
     };
-  }, [claudeApiKey]);
+  }, [claudeApiKey, aiProvider, ollamaBaseUrl, ollamaModel]);
 
   const sendMessage = useCallback(
     async (text: string) => {

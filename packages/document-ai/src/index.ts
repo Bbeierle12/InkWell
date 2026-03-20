@@ -14,6 +14,8 @@ export { DocumentAIQueue } from './queue/document-ai-queue';
 export { ContextManager } from './context';
 export { Reconciler } from './reconciler';
 export { ClaudeClient } from './claude/client';
+export { OllamaClient, OllamaAPIError } from './ollama';
+export type { OllamaClientOptions } from './ollama';
 export { parseAIResponse, collectAndParse } from './claude/response-parser';
 export { estimateTokens, countTokens } from './claude/token-counter';
 export { DocumentAIServiceImpl } from './service';

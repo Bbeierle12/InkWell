@@ -20,6 +20,7 @@ import type {
   EditorFontFamily,
   EditorFontSize,
   EditorWidth,
+  AIProvider,
   GhostTextDelay,
   AutoSaveInterval,
 } from '@/lib/settings-store';
@@ -28,6 +29,8 @@ import { editorJsonToMarkdown } from '@/lib/markdown-export';
 import { destroyDocumentAI } from '@/lib/document-ai-instance';
 import { saveClaudeApiKeyToSecureStorage } from '@/lib/claude-key-storage';
 import { isTauriEnvironment } from '@/lib/tauri-bridge';
+import { OllamaClient } from '@inkwell/document-ai';
+import type { OllamaModelInfo } from '@inkwell/shared';
 
 type TabId = 'appearance' | 'editor' | 'ai' | 'data' | 'about';
 
@@ -293,9 +296,15 @@ function EditorTab() {
 // ── AI Tab ──
 
 function AITab() {
+  const aiProvider = useSettingsStore((s) => s.aiProvider);
+  const setAiProvider = useSettingsStore((s) => s.setAiProvider);
   const setAiAuthMethod = useSettingsStore((s) => s.setAiAuthMethod);
   const claudeApiKey = useSettingsStore((s) => (typeof s.claudeApiKey === 'string' ? s.claudeApiKey : ''));
   const setClaudeApiKey = useSettingsStore((s) => s.setClaudeApiKey);
+  const ollamaBaseUrl = useSettingsStore((s) => s.ollamaBaseUrl);
+  const setOllamaBaseUrl = useSettingsStore((s) => s.setOllamaBaseUrl);
+  const ollamaModel = useSettingsStore((s) => s.ollamaModel);
+  const setOllamaModel = useSettingsStore((s) => s.setOllamaModel);
   const ghostTextEnabled = useSettingsStore((s) => Boolean(s.ghostTextEnabled));
   const setGhostTextEnabled = useSettingsStore((s) => s.setGhostTextEnabled);
   const ghostTextDebounceMs = useSettingsStore((s) =>
@@ -305,6 +314,7 @@ function AITab() {
   );
   const setGhostTextDebounceMs = useSettingsStore((s) => s.setGhostTextDebounceMs);
 
+  // Claude key state
   const [localKey, setLocalKey] = useState<string>(claudeApiKey);
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -313,9 +323,20 @@ function AITab() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const keyChanged = localKey !== claudeApiKey;
 
+  // Ollama state
+  const [localOllamaUrl, setLocalOllamaUrl] = useState(ollamaBaseUrl);
+  const [ollamaModels, setOllamaModels] = useState<OllamaModelInfo[]>([]);
+  const [ollamaHealth, setOllamaHealth] = useState<'connected' | 'disconnected' | 'checking'>('checking');
+  const [ollamaLoadingModels, setOllamaLoadingModels] = useState(false);
+  const ollamaUrlChanged = localOllamaUrl !== ollamaBaseUrl;
+
   useEffect(() => {
     setLocalKey(claudeApiKey);
   }, [claudeApiKey]);
+
+  useEffect(() => {
+    setLocalOllamaUrl(ollamaBaseUrl);
+  }, [ollamaBaseUrl]);
 
   useEffect(() => {
     setAiAuthMethod('api_key');
@@ -328,6 +349,38 @@ function AITab() {
       }
     };
   }, []);
+
+  // Check Ollama health and load models when provider is ollama
+  const checkOllamaAndLoadModels = useCallback(async (url: string) => {
+    setOllamaHealth('checking');
+    setOllamaLoadingModels(true);
+    try {
+      const healthy = await OllamaClient.checkHealth(url);
+      if (healthy) {
+        setOllamaHealth('connected');
+        const models = await OllamaClient.listModels(url);
+        setOllamaModels(models);
+        // Auto-select first model if none selected
+        if (!ollamaModel && models.length > 0) {
+          setOllamaModel(models[0].name);
+        }
+      } else {
+        setOllamaHealth('disconnected');
+        setOllamaModels([]);
+      }
+    } catch {
+      setOllamaHealth('disconnected');
+      setOllamaModels([]);
+    } finally {
+      setOllamaLoadingModels(false);
+    }
+  }, [ollamaModel, setOllamaModel]);
+
+  useEffect(() => {
+    if (aiProvider === 'ollama') {
+      void checkOllamaAndLoadModels(ollamaBaseUrl);
+    }
+  }, [aiProvider, ollamaBaseUrl, checkOllamaAndLoadModels]);
 
   const handleSaveKey = useCallback(async () => {
     const trimmed = localKey.trim();
@@ -345,7 +398,6 @@ function AITab() {
 
       setClaudeApiKey(trimmed);
       setAiAuthMethod('api_key');
-      // Re-initialize the AI service with the new key
       destroyDocumentAI();
       setSaved(true);
       if (saveTimerRef.current) {
@@ -357,62 +409,181 @@ function AITab() {
     }
   }, [localKey, setAiAuthMethod, setClaudeApiKey]);
 
+  const handleSaveOllamaUrl = useCallback(() => {
+    const trimmed = localOllamaUrl.trim();
+    setOllamaBaseUrl(trimmed);
+    destroyDocumentAI();
+    void checkOllamaAndLoadModels(trimmed);
+  }, [localOllamaUrl, setOllamaBaseUrl, checkOllamaAndLoadModels]);
+
+  const handleProviderChange = useCallback((provider: AIProvider) => {
+    setAiProvider(provider);
+    destroyDocumentAI();
+  }, [setAiProvider]);
+
+  const handleOllamaModelChange = useCallback((model: string) => {
+    setOllamaModel(model);
+    destroyDocumentAI();
+  }, [setOllamaModel]);
+
+  const healthDot = ollamaHealth === 'connected'
+    ? '#22c55e'
+    : ollamaHealth === 'disconnected'
+      ? '#ef4444'
+      : '#9ca3af';
+
   return (
     <>
       <div className="inkwell-settings-section">
-        <div className="inkwell-settings-section-title">API Configuration</div>
-
+        <div className="inkwell-settings-section-title">AI Provider</div>
         <div className="inkwell-setting-row">
           <div>
-            <div className="inkwell-setting-label">Auth method</div>
-            <div className="inkwell-setting-desc">Claude requests use API key authentication.</div>
+            <div className="inkwell-setting-label">Provider</div>
+            <div className="inkwell-setting-desc">Choose between cloud (Claude) or local (Ollama) AI</div>
           </div>
-          <span className="inkwell-setting-label">API Key</span>
-        </div>
-
-        <div style={{ marginBottom: '0.75rem' }}>
-          <div className="inkwell-setting-label" style={{ marginBottom: '0.375rem' }}>Claude API Key</div>
-          <div className="inkwell-setting-desc" style={{ marginBottom: '0.5rem' }}>
-            Inkwell uses Anthropic API access. This overrides the NEXT_PUBLIC_CLAUDE_API_KEY environment variable.
-          </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <input
-              type={showKey ? 'text' : 'password'}
-              className="inkwell-setting-input"
-              value={localKey}
-              onChange={(e) => setLocalKey(e.target.value)}
-              placeholder="sk-ant-..."
-              aria-label="Claude API key"
-            />
-            <button
-              className="inkwell-btn-secondary"
-              onClick={() => setShowKey(!showKey)}
-              style={{ whiteSpace: 'nowrap', padding: '0.375rem 0.625rem' }}
-            >
-              {showKey ? 'Hide' : 'Show'}
-            </button>
-            <button
-              className="inkwell-btn-primary"
-              onClick={() => {
-                void handleSaveKey();
-              }}
-              disabled={!keyChanged || saving}
-              style={{ whiteSpace: 'nowrap' }}
-            >
-              {saving ? 'Saving...' : saved ? 'Saved' : 'Save'}
-            </button>
-          </div>
-          {saveError && (
-            <div className="inkwell-setting-desc" style={{ color: '#dc2626', marginTop: '0.5rem' }}>
-              {saveError}
-            </div>
-          )}
-        </div>
-
-        <div className="inkwell-setting-desc">
-          Claude account sign-in is currently turned off for this build.
+          <select
+            className="inkwell-setting-select"
+            value={aiProvider}
+            onChange={(e) => handleProviderChange(e.target.value as AIProvider)}
+          >
+            <option value="claude">Claude (Anthropic)</option>
+            <option value="ollama">Ollama (Local)</option>
+          </select>
         </div>
       </div>
+
+      {aiProvider === 'claude' && (
+        <div className="inkwell-settings-section">
+          <div className="inkwell-settings-section-title">Claude Configuration</div>
+
+          <div style={{ marginBottom: '0.75rem' }}>
+            <div className="inkwell-setting-label" style={{ marginBottom: '0.375rem' }}>Claude API Key</div>
+            <div className="inkwell-setting-desc" style={{ marginBottom: '0.5rem' }}>
+              Inkwell uses Anthropic API access. This overrides the NEXT_PUBLIC_CLAUDE_API_KEY environment variable.
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type={showKey ? 'text' : 'password'}
+                className="inkwell-setting-input"
+                value={localKey}
+                onChange={(e) => setLocalKey(e.target.value)}
+                placeholder="sk-ant-..."
+                aria-label="Claude API key"
+              />
+              <button
+                className="inkwell-btn-secondary"
+                onClick={() => setShowKey(!showKey)}
+                style={{ whiteSpace: 'nowrap', padding: '0.375rem 0.625rem' }}
+              >
+                {showKey ? 'Hide' : 'Show'}
+              </button>
+              <button
+                className="inkwell-btn-primary"
+                onClick={() => {
+                  void handleSaveKey();
+                }}
+                disabled={!keyChanged || saving}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                {saving ? 'Saving...' : saved ? 'Saved' : 'Save'}
+              </button>
+            </div>
+            {saveError && (
+              <div className="inkwell-setting-desc" style={{ color: '#dc2626', marginTop: '0.5rem' }}>
+                {saveError}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {aiProvider === 'ollama' && (
+        <div className="inkwell-settings-section">
+          <div className="inkwell-settings-section-title">Ollama Configuration</div>
+
+          <div className="inkwell-setting-row">
+            <div>
+              <div className="inkwell-setting-label">Connection status</div>
+              <div className="inkwell-setting-desc">
+                {ollamaHealth === 'checking' ? 'Checking...' : ollamaHealth === 'connected' ? 'Connected' : 'Disconnected'}
+              </div>
+            </div>
+            <span
+              style={{
+                display: 'inline-block',
+                width: 12,
+                height: 12,
+                borderRadius: '50%',
+                backgroundColor: healthDot,
+              }}
+              aria-label={`Ollama ${ollamaHealth}`}
+            />
+          </div>
+
+          <div style={{ marginBottom: '0.75rem' }}>
+            <div className="inkwell-setting-label" style={{ marginBottom: '0.375rem' }}>Server URL</div>
+            <div className="inkwell-setting-desc" style={{ marginBottom: '0.5rem' }}>
+              The base URL where Ollama is running.
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                type="text"
+                className="inkwell-setting-input"
+                value={localOllamaUrl}
+                onChange={(e) => setLocalOllamaUrl(e.target.value)}
+                placeholder="http://localhost:11434"
+                aria-label="Ollama server URL"
+              />
+              <button
+                className="inkwell-btn-primary"
+                onClick={handleSaveOllamaUrl}
+                disabled={!ollamaUrlChanged}
+                style={{ whiteSpace: 'nowrap' }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+
+          <div className="inkwell-setting-row">
+            <div>
+              <div className="inkwell-setting-label">Model</div>
+              <div className="inkwell-setting-desc">
+                {ollamaModels.length === 0 && ollamaHealth === 'connected'
+                  ? 'No models found. Pull a model with: ollama pull llama3.2'
+                  : ollamaModels.length === 0
+                    ? 'Connect to Ollama to see available models'
+                    : `${ollamaModels.length} model${ollamaModels.length !== 1 ? 's' : ''} available`}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <select
+                className="inkwell-setting-select"
+                value={ollamaModel}
+                onChange={(e) => handleOllamaModelChange(e.target.value)}
+                disabled={ollamaModels.length === 0}
+              >
+                {ollamaModels.length === 0 && (
+                  <option value="">No models</option>
+                )}
+                {ollamaModels.map((m) => (
+                  <option key={m.name} value={m.name}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="inkwell-btn-secondary"
+                onClick={() => void checkOllamaAndLoadModels(ollamaBaseUrl)}
+                disabled={ollamaLoadingModels}
+                style={{ whiteSpace: 'nowrap', padding: '0.375rem 0.625rem' }}
+              >
+                {ollamaLoadingModels ? 'Loading...' : 'Refresh'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="inkwell-settings-section">
         <div className="inkwell-settings-section-title">Inline Suggestions</div>

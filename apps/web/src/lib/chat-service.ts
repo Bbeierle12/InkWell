@@ -1,14 +1,32 @@
 /**
  * Chat Service
  *
- * Wraps ClaudeClient for multi-turn chat with inline edit support.
+ * Wraps a StreamingAIClient for multi-turn chat with inline edit support.
  * Uses <inkwell-edit> XML markers in the response to propose edits.
  * Document context is sent as a cached system prompt.
  */
 
-import { ClaudeClient } from '@inkwell/document-ai';
 import { parseAIResponse } from '@inkwell/document-ai';
 import type { AIEditInstruction, ChatMessage } from '@inkwell/shared';
+
+/**
+ * Common streaming interface shared by ClaudeClient and OllamaClient.
+ * Any client that produces an AsyncGenerator<string> from a messages array
+ * can power the chat service.
+ */
+export interface StreamingAIClient {
+  stream(
+    messages: Array<{ role: string; content: string }>,
+    options?: {
+      model?: string;
+      maxTokens?: number;
+      signal?: AbortSignal;
+      stopSequences?: string[];
+      system?: string;
+      systemCacheControl?: boolean;
+    },
+  ): AsyncGenerator<string, void, unknown>;
+}
 
 const MAX_DOC_CHARS = 60_000;
 const MAX_HISTORY_MESSAGES = 20;
@@ -109,11 +127,11 @@ export function extractEditBlocks(text: string): {
 }
 
 export class ChatService {
-  private client: ClaudeClient;
+  private client: StreamingAIClient;
   private abortController: AbortController | null = null;
 
-  constructor(apiKey: string) {
-    this.client = new ClaudeClient({ apiKey });
+  constructor(client: StreamingAIClient) {
+    this.client = client;
   }
 
   /**
