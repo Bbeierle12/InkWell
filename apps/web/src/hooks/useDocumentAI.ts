@@ -36,8 +36,6 @@ export function useDocumentAI({ editor }: UseDocumentAIOptions) {
   const sessionRef = useRef<AIOperationSession | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const claudeApiKey = useSettingsStore((s) => s.claudeApiKey);
-  const aiAuthMethod = useSettingsStore((s) => s.aiAuthMethod);
-  const claudeSubscriptionConnected = useSettingsStore((s) => s.claudeSubscriptionConnected);
   // Track the last failed operation for retry
   const lastOpRef = useRef<{ operation: OperationType; args?: string } | null>(null);
 
@@ -52,7 +50,7 @@ export function useDocumentAI({ editor }: UseDocumentAIOptions) {
     return () => {
       destroyDocumentAI();
     };
-  }, [claudeApiKey, aiAuthMethod, claudeSubscriptionConnected]);
+  }, [claudeApiKey]);
 
   // Track online/offline status and abort in-flight requests on disconnect
   useEffect(() => {

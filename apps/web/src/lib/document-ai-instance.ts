@@ -15,9 +15,8 @@ import {
 import { useSettingsStore } from './settings-store';
 import {
   getMissingClaudeApiKeyMessage,
-  resolveClaudeAuth,
+  resolveClaudeApiKey,
 } from './ai-auth';
-import { streamClaudeViaSubscription } from './claude-subscription-provider';
 
 let instance: DocumentAIServiceImpl | null = null;
 
@@ -97,10 +96,7 @@ export function getDocumentAI(): DocumentAIServiceImpl {
         ),
       });
     } else {
-      const auth = resolveClaudeAuth({
-        preferredMethod: settings.aiAuthMethod,
-        subscriptionSupported: settings.claudeSubscriptionSupported,
-        subscriptionConnected: settings.claudeSubscriptionConnected,
+      const auth = resolveClaudeApiKey({
         settingsApiKey: settings.claudeApiKey,
         envApiKey: process.env.NEXT_PUBLIC_CLAUDE_API_KEY,
       });
@@ -110,11 +106,8 @@ export function getDocumentAI(): DocumentAIServiceImpl {
       }
 
       instance = new DocumentAIServiceImpl({
-        apiKey: auth.method === 'api_key' ? auth.apiKey : '__subscription_transport__',
+        apiKey: auth.apiKey,
         localProvider: createTauriLocalProvider(),
-        cloudStreamProvider: auth.method === 'claude_subscription'
-          ? streamClaudeViaSubscription
-          : undefined,
       });
     }
   }

@@ -13,7 +13,7 @@ describe('sanitizePersistedSettings', () => {
       spellCheck: false,
       showWordCount: false,
       showCharCount: true,
-      aiAuthMethod: 'api_key',
+
       ghostTextEnabled: true,
       ghostTextDebounceMs: 800,
     });
@@ -28,7 +28,7 @@ describe('sanitizePersistedSettings', () => {
       spellCheck: false,
       showWordCount: false,
       showCharCount: true,
-      aiAuthMethod: 'api_key',
+
       ghostTextEnabled: true,
       ghostTextDebounceMs: 800,
     });
@@ -45,7 +45,6 @@ describe('sanitizePersistedSettings', () => {
       spellCheck: false,
       showWordCount: 'true',
       showCharCount: true,
-      aiAuthMethod: 'oauth',
       ghostTextEnabled: {},
       ghostTextDebounceMs: 500,
     });

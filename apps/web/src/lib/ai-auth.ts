@@ -1,11 +1,9 @@
 /**
  * AI Auth utilities.
  *
- * Centralizes Claude auth method capabilities and API key resolution so
- * service bootstrapping does not duplicate auth-source logic.
+ * Centralizes Claude API key resolution so service bootstrapping
+ * does not duplicate auth-source logic.
  */
-
-export type AIAuthMethod = 'api_key' | 'claude_subscription';
 
 export interface ResolveClaudeApiKeyInput {
   settingsApiKey?: string | null;
@@ -17,25 +15,6 @@ export interface ResolvedClaudeApiKey {
   source: 'settings' | 'environment';
   apiKey: string;
 }
-
-export interface ResolveClaudeAuthInput extends ResolveClaudeApiKeyInput {
-  preferredMethod: AIAuthMethod;
-  subscriptionSupported: boolean;
-  subscriptionConnected: boolean;
-}
-
-export type ResolvedClaudeAuth =
-  | { method: 'claude_subscription' }
-  | ResolvedClaudeApiKey;
-
-/**
- * Claude account/subscription sign-in toggle.
- * API-key auth is the active production path.
- */
-export const CLAUDE_SUBSCRIPTION_SIGNIN_SUPPORTED = false;
-
-export const CLAUDE_SUBSCRIPTION_SIGNIN_UNSUPPORTED_REASON =
-  'This app is configured for Claude API key authentication.';
 
 /**
  * Resolve a Claude API key, preferring user settings over environment.
@@ -63,26 +42,6 @@ export function resolveClaudeApiKey(
   }
 
   return null;
-}
-
-/**
- * Resolve the active auth strategy for Claude operations.
- * Preference order:
- * 1) subscription when explicitly selected and connected
- * 2) API key from settings/environment
- */
-export function resolveClaudeAuth(
-  input: ResolveClaudeAuthInput,
-): ResolvedClaudeAuth | null {
-  if (
-    input.preferredMethod === 'claude_subscription'
-    && input.subscriptionSupported
-    && input.subscriptionConnected
-  ) {
-    return { method: 'claude_subscription' };
-  }
-
-  return resolveClaudeApiKey(input);
 }
 
 export function sanitizeAuthErrorMessage(message: string): string {

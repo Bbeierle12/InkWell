@@ -298,7 +298,6 @@ function EditorTab() {
 function AITab() {
   const aiProvider = useSettingsStore((s) => s.aiProvider);
   const setAiProvider = useSettingsStore((s) => s.setAiProvider);
-  const setAiAuthMethod = useSettingsStore((s) => s.setAiAuthMethod);
   const claudeApiKey = useSettingsStore((s) => (typeof s.claudeApiKey === 'string' ? s.claudeApiKey : ''));
   const setClaudeApiKey = useSettingsStore((s) => s.setClaudeApiKey);
   const ollamaBaseUrl = useSettingsStore((s) => s.ollamaBaseUrl);
@@ -337,10 +336,6 @@ function AITab() {
   useEffect(() => {
     setLocalOllamaUrl(ollamaBaseUrl);
   }, [ollamaBaseUrl]);
-
-  useEffect(() => {
-    setAiAuthMethod('api_key');
-  }, [setAiAuthMethod]);
 
   useEffect(() => {
     return () => {
@@ -397,7 +392,6 @@ function AITab() {
       }
 
       setClaudeApiKey(trimmed);
-      setAiAuthMethod('api_key');
       destroyDocumentAI();
       setSaved(true);
       if (saveTimerRef.current) {
@@ -407,7 +401,7 @@ function AITab() {
     } finally {
       setSaving(false);
     }
-  }, [localKey, setAiAuthMethod, setClaudeApiKey]);
+  }, [localKey, setClaudeApiKey]);
 
   const handleSaveOllamaUrl = useCallback(() => {
     const trimmed = localOllamaUrl.trim();

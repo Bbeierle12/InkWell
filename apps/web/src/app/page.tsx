@@ -29,11 +29,12 @@ import { useGhostText } from '@/hooks/useGhostText';
 import { useVoicePipeline } from '@/hooks/useVoicePipeline';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useFileOpen } from '@/hooks/useFileOpen';
+import { TagInput } from '@/components/TagInput';
 import { useDocumentStore } from '@/lib/document-store';
 import { useChatStore } from '@/lib/chat-store';
 import { useSettingsStore, FONT_FAMILY_MAP, FONT_SIZE_MAP, EDITOR_WIDTH_MAP } from '@/lib/settings-store';
 import { deriveTitleFromContent } from '@/lib/document-utils';
-import { isTauriEnvironment, checkModelsStatus, getClaudeAuthStatus } from '@/lib/tauri-bridge';
+import { isTauriEnvironment, checkModelsStatus } from '@/lib/tauri-bridge';
 import {
   loadClaudeApiKeyFromSecureStorage,
   migrateLegacyClaudeApiKeyFromLocalStorage,
@@ -59,9 +60,8 @@ export default function Home() {
   const [showSetup, setShowSetup] = useState(false);
   const [setupChecked, setSetupChecked] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const { title, setTitle, toggleSidebar } = useDocumentStore();
+  const { title, setTitle, toggleSidebar, documentId, documents } = useDocumentStore();
   const setClaudeApiKey = useSettingsStore((s) => s.setClaudeApiKey);
-  const setClaudeSubscriptionStatus = useSettingsStore((s) => s.setClaudeSubscriptionStatus);
   const {
     editorFontFamily,
     editorFontSize,
@@ -96,20 +96,13 @@ export default function Home() {
       if (!cancelled && secureKey) {
         setClaudeApiKey(secureKey);
       }
-      const authStatus = await getClaudeAuthStatus();
-      if (!cancelled && authStatus) {
-        setClaudeSubscriptionStatus({
-          supported: authStatus.supported,
-          connected: authStatus.connected,
-        });
-      }
     }
 
     void hydrateClaudeKey();
     return () => {
       cancelled = true;
     };
-  }, [setClaudeApiKey, setClaudeSubscriptionStatus]);
+  }, [setClaudeApiKey]);
 
   const handleSetupComplete = useCallback(() => {
     setShowSetup(false);
@@ -305,6 +298,12 @@ export default function Home() {
               onAcceptDiff={acceptDiff}
               onRejectDiff={rejectDiff}
             />
+            {documentId && (
+              <TagInput
+                documentId={documentId}
+                tags={documents.find((d) => d.id === documentId)?.tags ?? []}
+              />
+            )}
           </div>
           <StatusBar editor={editor} />
         </div>

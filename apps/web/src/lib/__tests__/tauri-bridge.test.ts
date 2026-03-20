@@ -107,49 +107,4 @@ describe('tauri-bridge', () => {
     expect(result).toBe(false);
   });
 
-  it('getClaudeAuthStatus returns null when not in Tauri', async () => {
-    const { getClaudeAuthStatus } = await import('../tauri-bridge');
-    const result = await getClaudeAuthStatus();
-    expect(result).toBeNull();
-  });
-
-  it('startClaudeSubscriptionSignIn returns null when not in Tauri', async () => {
-    const { startClaudeSubscriptionSignIn } = await import('../tauri-bridge');
-    const result = await startClaudeSubscriptionSignIn();
-    expect(result).toBeNull();
-  });
-
-  it('completeClaudeSubscriptionSignIn returns null when not in Tauri', async () => {
-    const { completeClaudeSubscriptionSignIn } = await import('../tauri-bridge');
-    const result = await completeClaudeSubscriptionSignIn('inkwell://auth/callback?code=x');
-    expect(result).toBeNull();
-  });
-
-  it('refreshClaudeSubscriptionToken returns null when not in Tauri', async () => {
-    const { refreshClaudeSubscriptionToken } = await import('../tauri-bridge');
-    const result = await refreshClaudeSubscriptionToken();
-    expect(result).toBeNull();
-  });
-
-  it('signOutClaudeSubscription returns false when not in Tauri', async () => {
-    const { signOutClaudeSubscription } = await import('../tauri-bridge');
-    const result = await signOutClaudeSubscription();
-    expect(result).toBe(false);
-  });
-
-  it('invokeClaudeViaSubscription returns null when not in Tauri', async () => {
-    const { invokeClaudeViaSubscription } = await import('../tauri-bridge');
-    const result = await invokeClaudeViaSubscription({
-      model: 'claude-sonnet-4-5-20250929',
-      messages: [{ role: 'user', content: 'hello' }],
-      max_tokens: 64,
-    });
-    expect(result).toBeNull();
-  });
-
-  it('onClaudeAuthCallback returns null when not in Tauri', async () => {
-    const { onClaudeAuthCallback } = await import('../tauri-bridge');
-    const unlisten = await onClaudeAuthCallback(() => {});
-    expect(unlisten).toBeNull();
-  });
 });

@@ -72,34 +72,6 @@ interface StreamTokenEvent {
   done: boolean;
 }
 
-export interface ClaudeAuthStatus {
-  supported: boolean;
-  connected: boolean;
-  method: 'api_key' | 'claude_subscription';
-  can_refresh: boolean;
-  expires_at_epoch_ms: number | null;
-  message: string | null;
-}
-
-export interface ClaudeSignInStartResult {
-  started: boolean;
-  auth_url: string | null;
-  message: string | null;
-}
-
-interface ClaudeMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-interface ClaudeInvokeViaSubscriptionRequest {
-  model: string;
-  messages: ClaudeMessage[];
-  max_tokens: number;
-  system?: string;
-  stop_sequences?: string[];
-  system_cache_control?: boolean;
-}
 
 // ── Secure Credential Commands ──
 
@@ -147,103 +119,6 @@ export async function clearSecureClaudeApiKey(): Promise<boolean> {
   }
 }
 
-// ── Claude Account Auth Commands ──
-
-export async function getClaudeAuthStatus(): Promise<ClaudeAuthStatus | null> {
-  const invoke = await getTauriInvoke();
-  if (!invoke) return null;
-
-  try {
-    return (await invoke('auth_get_claude_status')) as ClaudeAuthStatus;
-  } catch {
-    return null;
-  }
-}
-
-export async function startClaudeSubscriptionSignIn(): Promise<ClaudeSignInStartResult | null> {
-  const invoke = await getTauriInvoke();
-  if (!invoke) return null;
-
-  try {
-    return (await invoke('auth_start_claude_sign_in')) as ClaudeSignInStartResult;
-  } catch {
-    return null;
-  }
-}
-
-export async function completeClaudeSubscriptionSignIn(
-  callbackUrl: string,
-): Promise<ClaudeAuthStatus | null> {
-  const invoke = await getTauriInvoke();
-  if (!invoke) return null;
-
-  try {
-    return (await invoke('auth_complete_claude_sign_in', {
-      callbackUrl,
-    })) as ClaudeAuthStatus;
-  } catch {
-    return null;
-  }
-}
-
-export async function refreshClaudeSubscriptionToken(): Promise<ClaudeAuthStatus | null> {
-  const invoke = await getTauriInvoke();
-  if (!invoke) return null;
-
-  try {
-    return (await invoke('auth_refresh_claude_token')) as ClaudeAuthStatus;
-  } catch {
-    return null;
-  }
-}
-
-export async function signOutClaudeSubscription(): Promise<boolean> {
-  const invoke = await getTauriInvoke();
-  if (!invoke) return false;
-
-  try {
-    await invoke('auth_sign_out_claude');
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Invoke Claude messages via desktop auth transport. This keeps account tokens
- * in Tauri secure storage instead of the renderer.
- */
-export async function invokeClaudeViaSubscription(
-  request: ClaudeInvokeViaSubscriptionRequest,
-): Promise<string | null> {
-  const invoke = await getTauriInvoke();
-  if (!invoke) return null;
-
-  try {
-    return (await invoke('auth_invoke_claude_messages', { request })) as string;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Listen for OAuth callback URLs emitted by the desktop layer.
- */
-export async function onClaudeAuthCallback(
-  callback: (callbackUrl: string) => void,
-): Promise<(() => void) | null> {
-  const listen = await getTauriListen();
-  if (!listen) return null;
-
-  try {
-    return await listen('auth-callback-url', (event) => {
-      const callbackUrl = event.payload as string;
-      if (callbackUrl) callback(callbackUrl);
-    });
-  } catch {
-    return null;
-  }
-}
 
 // ── LLM Commands ──
 

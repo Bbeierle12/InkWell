@@ -14,7 +14,6 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 export type EditorFontFamily = 'system' | 'serif' | 'sans-serif' | 'mono';
 export type EditorFontSize = 'small' | 'default' | 'large' | 'xl';
 export type EditorWidth = 'narrow' | 'default' | 'wide' | 'full';
-export type AIAuthMethod = 'api_key' | 'claude_subscription';
 export type AIProvider = 'claude' | 'ollama';
 export type GhostTextDelay = 300 | 500 | 800;
 export type AutoSaveInterval = 10_000 | 30_000 | 60_000 | 120_000 | 300_000;
@@ -35,14 +34,11 @@ interface SettingsState {
 
   // AI
   aiProvider: AIProvider;
-  aiAuthMethod: AIAuthMethod;
   claudeApiKey: string;
   ollamaBaseUrl: string;
   ollamaModel: string;
   ghostTextEnabled: boolean;
   ghostTextDebounceMs: GhostTextDelay;
-  claudeSubscriptionSupported: boolean;
-  claudeSubscriptionConnected: boolean;
 
   // Actions
   setTheme: (theme: ThemeMode) => void;
@@ -55,16 +51,11 @@ interface SettingsState {
   setShowWordCount: (show: boolean) => void;
   setShowCharCount: (show: boolean) => void;
   setAiProvider: (provider: AIProvider) => void;
-  setAiAuthMethod: (method: AIAuthMethod) => void;
   setClaudeApiKey: (key: string) => void;
   setOllamaBaseUrl: (url: string) => void;
   setOllamaModel: (model: string) => void;
   setGhostTextEnabled: (enabled: boolean) => void;
   setGhostTextDebounceMs: (delay: GhostTextDelay) => void;
-  setClaudeSubscriptionStatus: (status: {
-    supported: boolean;
-    connected: boolean;
-  }) => void;
   resetAll: () => void;
 }
 
@@ -80,7 +71,6 @@ type PersistedSettingsShape = Pick<
   | 'showWordCount'
   | 'showCharCount'
   | 'aiProvider'
-  | 'aiAuthMethod'
   | 'ollamaBaseUrl'
   | 'ollamaModel'
   | 'ghostTextEnabled'
@@ -100,14 +90,11 @@ const DEFAULTS = {
   showWordCount: true,
   showCharCount: true,
   aiProvider: 'claude' as AIProvider,
-  aiAuthMethod: 'api_key' as AIAuthMethod,
   claudeApiKey: '',
   ollamaBaseUrl: 'http://localhost:11434',
   ollamaModel: '',
   ghostTextEnabled: true,
   ghostTextDebounceMs: 500 as GhostTextDelay,
-  claudeSubscriptionSupported: false,
-  claudeSubscriptionConnected: false,
 };
 
 const THEME_VALUES: ThemeMode[] = ['light', 'dark', 'system'];
@@ -116,7 +103,6 @@ const FONT_SIZE_VALUES: EditorFontSize[] = ['small', 'default', 'large', 'xl'];
 const EDITOR_WIDTH_VALUES: EditorWidth[] = ['narrow', 'default', 'wide', 'full'];
 const AUTO_SAVE_INTERVAL_VALUES: AutoSaveInterval[] = [10_000, 30_000, 60_000, 120_000, 300_000];
 const AI_PROVIDER_VALUES: AIProvider[] = ['claude', 'ollama'];
-const AI_AUTH_METHOD_VALUES: AIAuthMethod[] = ['api_key'];
 const GHOST_TEXT_DELAY_VALUES: GhostTextDelay[] = [300, 500, 800];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -169,9 +155,6 @@ export function sanitizePersistedSettings(value: unknown): Partial<PersistedSett
 
   const aiProvider = pickStringEnum(value.aiProvider, AI_PROVIDER_VALUES);
   if (aiProvider) next.aiProvider = aiProvider;
-
-  const aiAuthMethod = pickStringEnum(value.aiAuthMethod, AI_AUTH_METHOD_VALUES);
-  if (aiAuthMethod) next.aiAuthMethod = aiAuthMethod;
 
   if (typeof value.ollamaBaseUrl === 'string') next.ollamaBaseUrl = value.ollamaBaseUrl;
   if (typeof value.ollamaModel === 'string') next.ollamaModel = value.ollamaModel;
@@ -230,18 +213,11 @@ export const useSettingsStore = create<SettingsState>()(
       setAiProvider: (aiProvider) => set({
         aiProvider: AI_PROVIDER_VALUES.includes(aiProvider) ? aiProvider : DEFAULTS.aiProvider,
       }),
-      setAiAuthMethod: (aiAuthMethod) => set({
-        aiAuthMethod: aiAuthMethod === 'api_key' ? 'api_key' : DEFAULTS.aiAuthMethod,
-      }),
       setClaudeApiKey: (claudeApiKey) => set({ claudeApiKey }),
       setOllamaBaseUrl: (ollamaBaseUrl) => set({ ollamaBaseUrl }),
       setOllamaModel: (ollamaModel) => set({ ollamaModel }),
       setGhostTextEnabled: (ghostTextEnabled) => set({ ghostTextEnabled }),
       setGhostTextDebounceMs: (ghostTextDebounceMs) => set({ ghostTextDebounceMs }),
-      setClaudeSubscriptionStatus: ({ supported, connected }) => set({
-        claudeSubscriptionSupported: supported,
-        claudeSubscriptionConnected: connected,
-      }),
       resetAll: () => set(DEFAULTS),
     }),
     {
@@ -261,7 +237,6 @@ export const useSettingsStore = create<SettingsState>()(
         showWordCount: state.showWordCount,
         showCharCount: state.showCharCount,
         aiProvider: state.aiProvider,
-        aiAuthMethod: state.aiAuthMethod,
         ollamaBaseUrl: state.ollamaBaseUrl,
         ollamaModel: state.ollamaModel,
         ghostTextEnabled: state.ghostTextEnabled,
