@@ -126,6 +126,10 @@ fn sanitize_model_filename(filename: &str) -> Result<String, String> {
         return Err("Model filename cannot be empty".to_string());
     }
 
+    if filename.contains('\\') {
+        return Err("Invalid model filename".to_string());
+    }
+
     let path = Path::new(filename);
     let mut components = path.components();
     let first = components.next();
