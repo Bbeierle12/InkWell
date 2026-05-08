@@ -10,7 +10,7 @@ import { persist } from 'zustand/middleware';
 
 // ── Types ──
 
-export type ThemeMode = 'light' | 'dark' | 'system';
+export type ThemeMode = 'paper' | 'dark' | 'classic' | 'system' | 'light';
 export type EditorFontFamily = 'system' | 'serif' | 'sans-serif' | 'mono';
 export type EditorFontSize = 'small' | 'default' | 'large' | 'xl';
 export type EditorWidth = 'narrow' | 'default' | 'wide' | 'full';
@@ -80,7 +80,7 @@ type PersistedSettingsShape = Pick<
 // ── Defaults ──
 
 const DEFAULTS = {
-  theme: 'system' as ThemeMode,
+  theme: 'paper' as ThemeMode,
   editorFontFamily: 'system' as EditorFontFamily,
   editorFontSize: 'default' as EditorFontSize,
   editorWidth: 'default' as EditorWidth,
@@ -97,7 +97,7 @@ const DEFAULTS = {
   ghostTextDebounceMs: 500 as GhostTextDelay,
 };
 
-const THEME_VALUES: ThemeMode[] = ['light', 'dark', 'system'];
+const THEME_VALUES: ThemeMode[] = ['paper', 'dark', 'classic', 'system', 'light'];
 const FONT_FAMILY_VALUES: EditorFontFamily[] = ['system', 'serif', 'sans-serif', 'mono'];
 const FONT_SIZE_VALUES: EditorFontSize[] = ['small', 'default', 'large', 'xl'];
 const EDITOR_WIDTH_VALUES: EditorWidth[] = ['narrow', 'default', 'wide', 'full'];

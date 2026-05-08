@@ -1,14 +1,16 @@
 'use client';
 
 /**
- * ChatPanel Component
+ * ChatPanel — "Ask InkWell" AI rail.
  *
  * Right-side panel for multi-turn AI chat about the document.
- * Shows conversation messages, streaming responses, and edit actions.
+ * Header shows orb + model subtitle; composer wraps a textarea
+ * with context pills and a model chip.
  */
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useChatStore } from '@/lib/chat-store';
+import { useSettingsStore } from '@/lib/settings-store';
 import type { ChatMessage } from '@inkwell/shared';
 
 interface ChatPanelProps {
@@ -31,10 +33,20 @@ function MessageBubble({
 
   return (
     <div
-      className={`inkwell-chat-message ${isUser ? 'inkwell-chat-message-user' : 'inkwell-chat-message-assistant'}`}
+      className={`inkwell-chat-message ${
+        isUser ? 'inkwell-chat-message-user' : 'inkwell-chat-message-assistant'
+      }`}
     >
+      {!isUser && (
+        <div className="inkwell-chat-message-meta">
+          <span className="inkwell-chat-message-meta-orb" />
+          <span>InkWell</span>
+        </div>
+      )}
       <div
-        className={`inkwell-chat-bubble ${isUser ? 'inkwell-chat-bubble-user' : 'inkwell-chat-bubble-assistant'}`}
+        className={`inkwell-chat-bubble ${
+          isUser ? 'inkwell-chat-bubble-user' : 'inkwell-chat-bubble-assistant'
+        }`}
       >
         {message.content}
       </div>
@@ -82,16 +94,20 @@ export function ChatPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { chatOpen, messages, streamingContent, streamStatus, error } =
-    useChatStore();
+  const { chatOpen, messages, streamingContent, streamStatus, error } = useChatStore();
   const { toggleChat, clearMessages } = useChatStore();
+  const aiProvider = useSettingsStore((s) => s.aiProvider);
+  const ollamaModel = useSettingsStore((s) => s.ollamaModel);
+  const modelLabel = aiProvider === 'claude' ? 'Sonnet' : ollamaModel || 'Local';
+  const subtitle =
+    aiProvider === 'claude'
+      ? 'Claude Sonnet · workspace context on'
+      : `Ollama · ${ollamaModel || 'no model selected'}`;
 
-  // Auto-scroll to bottom on new messages or streaming content
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
-  // Focus textarea when panel opens
   useEffect(() => {
     if (chatOpen) {
       textareaRef.current?.focus();
@@ -101,7 +117,6 @@ export function ChatPanel({
   const handleSend = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed || streamStatus === 'streaming') return;
-
     setInput('');
     await sendMessage(trimmed);
   }, [input, streamStatus, sendMessage]);
@@ -120,9 +135,14 @@ export function ChatPanel({
 
   return (
     <aside className="inkwell-chat-panel" aria-label="AI Chat">
-      {/* Header */}
       <div className="inkwell-chat-header">
-        <span className="inkwell-chat-title">AI Chat</span>
+        <div className="inkwell-chat-header-info">
+          <span className="inkwell-chat-title">
+            <span className="inkwell-chat-title-orb" />
+            Ask InkWell
+          </span>
+          <span className="inkwell-chat-subtitle">{subtitle}</span>
+        </div>
         <div className="inkwell-chat-header-actions">
           <button
             className="inkwell-chat-header-btn"
@@ -164,11 +184,10 @@ export function ChatPanel({
         </div>
       </div>
 
-      {/* Messages */}
       <div className="inkwell-chat-messages">
         {messages.length === 0 && !streamingContent && (
           <div className="inkwell-chat-empty">
-            Ask me anything about your document, or request edits.
+            Ask InkWell about your document, or request edits.
           </div>
         )}
         {messages.map((msg) => (
@@ -181,56 +200,69 @@ export function ChatPanel({
         ))}
         {streamingContent && (
           <div className="inkwell-chat-message inkwell-chat-message-assistant">
+            <div className="inkwell-chat-message-meta">
+              <span className="inkwell-chat-message-meta-orb" />
+              <span>InkWell · streaming</span>
+            </div>
             <div className="inkwell-chat-bubble inkwell-chat-bubble-assistant">
               {streamingContent}
               <span className="inkwell-chat-cursor" />
             </div>
           </div>
         )}
-        {error && (
-          <div className="inkwell-chat-error">{error}</div>
-        )}
+        {error && <div className="inkwell-chat-error">{error}</div>}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input area */}
       <div className="inkwell-chat-input-area">
-        <textarea
-          ref={textareaRef}
-          className="inkwell-chat-input"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask about your document..."
-          rows={2}
-          disabled={streamStatus === 'streaming'}
-        />
-        <div className="inkwell-chat-input-actions">
-          {streamStatus === 'streaming' ? (
-            <button
-              className="inkwell-chat-stop-btn"
-              onClick={stopStreaming}
-              aria-label="Stop streaming"
-            >
-              Stop
-            </button>
-          ) : (
-            <button
-              className="inkwell-chat-send-btn"
-              onClick={handleSend}
-              disabled={!input.trim()}
-              aria-label="Send message"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="currentColor"
+        <div className="inkwell-chat-input-box">
+          <textarea
+            ref={textareaRef}
+            className="inkwell-chat-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask InkWell, or press / for commands…"
+            rows={2}
+            disabled={streamStatus === 'streaming'}
+          />
+          <div className="inkwell-chat-input-row">
+            <span className="inkwell-chat-input-model">
+              <span className="led" />
+              {modelLabel}
+            </span>
+            <span style={{ fontSize: 10.5, color: 'var(--ink-4)' }}>⌘⇧L</span>
+            {streamStatus === 'streaming' ? (
+              <button
+                className="inkwell-chat-stop-btn"
+                onClick={stopStreaming}
+                aria-label="Stop streaming"
               >
-                <path d="M1.5 1.5l13 6.5-13 6.5V9l8-1-8-1V1.5z" />
-              </svg>
-            </button>
-          )}
+                Stop
+              </button>
+            ) : (
+              <button
+                className="inkwell-chat-send-btn"
+                onClick={handleSend}
+                disabled={!input.trim()}
+                aria-label="Send message"
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 10l14-7-5 17-3-7z" />
+                </svg>
+                Send
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </aside>

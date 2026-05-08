@@ -1,19 +1,16 @@
 'use client';
 
 /**
- * SettingsModal Component
+ * SettingsModal — InkWell native settings.
  *
- * Tabbed modal for managing all user settings: Appearance, Editor,
- * AI, Data & Privacy, and About. All settings except API key apply
- * immediately on change. Persisted via the settings store (localStorage).
+ * Left side nav (Appearance / Editor / AI & Privacy / Voice /
+ * Shortcuts / About) with paper-themed swatches, font chips,
+ * segmented controls, and toggles.
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   useSettingsStore,
-  FONT_FAMILY_MAP,
-  FONT_SIZE_MAP,
-  EDITOR_WIDTH_MAP,
 } from '@/lib/settings-store';
 import type {
   ThemeMode,
@@ -32,26 +29,34 @@ import { isTauriEnvironment } from '@/lib/tauri-bridge';
 import { OllamaClient } from '@inkwell/document-ai';
 import type { OllamaModelInfo } from '@inkwell/shared';
 
-type TabId = 'appearance' | 'editor' | 'ai' | 'data' | 'about';
-
-const TABS: { id: TabId; label: string }[] = [
-  { id: 'appearance', label: 'Appearance' },
-  { id: 'editor', label: 'Editor' },
-  { id: 'ai', label: 'AI' },
-  { id: 'data', label: 'Data' },
-  { id: 'about', label: 'About' },
-];
+type SectionId =
+  | 'appearance'
+  | 'editor'
+  | 'ai'
+  | 'voice'
+  | 'data'
+  | 'shortcuts'
+  | 'about';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+const SECTIONS: { id: SectionId; label: string; group: 'workspace' | 'system' }[] = [
+  { id: 'appearance', label: 'Appearance', group: 'workspace' },
+  { id: 'editor', label: 'Editor', group: 'workspace' },
+  { id: 'ai', label: 'AI & Privacy', group: 'workspace' },
+  { id: 'voice', label: 'Voice', group: 'workspace' },
+  { id: 'data', label: 'Data', group: 'system' },
+  { id: 'shortcuts', label: 'Shortcuts', group: 'system' },
+  { id: 'about', label: 'About', group: 'system' },
+];
+
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('appearance');
+  const [section, setSection] = useState<SectionId>('appearance');
   const modalRef = useRef<HTMLDivElement>(null);
 
-  // Close on Escape
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: KeyboardEvent) => {
@@ -61,7 +66,6 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     return () => window.removeEventListener('keydown', handler);
   }, [isOpen, onClose]);
 
-  // Focus trap: focus modal on open
   useEffect(() => {
     if (isOpen && modalRef.current) {
       modalRef.current.focus();
@@ -69,6 +73,9 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const workspaceSections = SECTIONS.filter((s) => s.group === 'workspace');
+  const systemSections = SECTIONS.filter((s) => s.group === 'system');
 
   return (
     <div
@@ -87,218 +94,292 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         tabIndex={-1}
       >
         <div className="inkwell-modal-header">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 20 20"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ color: 'var(--ink-3)' }}
+          >
+            <circle cx="10" cy="10" r="2.5" />
+            <path d="M10 2v3M10 15v3M2 10h3M15 10h3M4 4l2 2M14 14l2 2M4 16l2-2M14 6l2-2" />
+          </svg>
           <span className="inkwell-modal-title">Settings</span>
+          <span className="inkwell-modal-subtitle">InkWell · 1.0</span>
           <button
             className="inkwell-modal-close"
             onClick={onClose}
             aria-label="Close settings"
           >
-            &times;
+            ×
           </button>
         </div>
 
-        <div className="inkwell-modal-tabs" role="tablist">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              className={`inkwell-modal-tab ${activeTab === tab.id ? 'inkwell-modal-tab-active' : ''}`}
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <div className="inkwell-modal-body">
+          <nav className="inkwell-modal-nav" role="tablist" aria-label="Settings sections">
+            <div className="inkwell-modal-nav-section">Workspace</div>
+            {workspaceSections.map((s) => (
+              <button
+                key={s.id}
+                className={section === s.id ? 'on' : ''}
+                role="tab"
+                aria-selected={section === s.id}
+                onClick={() => setSection(s.id)}
+              >
+                {s.label}
+              </button>
+            ))}
+            <div className="inkwell-modal-nav-section">System</div>
+            {systemSections.map((s) => (
+              <button
+                key={s.id}
+                className={section === s.id ? 'on' : ''}
+                role="tab"
+                aria-selected={section === s.id}
+                onClick={() => setSection(s.id)}
+              >
+                {s.label}
+              </button>
+            ))}
+          </nav>
 
-        <div className="inkwell-modal-body" role="tabpanel">
-          {activeTab === 'appearance' && <AppearanceTab />}
-          {activeTab === 'editor' && <EditorTab />}
-          {activeTab === 'ai' && <AITab />}
-          {activeTab === 'data' && <DataTab />}
-          {activeTab === 'about' && <AboutTab />}
+          <div className="inkwell-modal-main" role="tabpanel">
+            {section === 'appearance' && <AppearanceSection />}
+            {section === 'editor' && <EditorSection />}
+            {section === 'ai' && <AISection />}
+            {section === 'voice' && <VoiceSection />}
+            {section === 'data' && <DataSection />}
+            {section === 'shortcuts' && <ShortcutsSection />}
+            {section === 'about' && <AboutSection />}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// ── Appearance Tab ──
+// ── Appearance ───────────────────────────────────────────────────────────
 
-function AppearanceTab() {
+function AppearanceSection() {
   const {
-    theme, setTheme,
-    editorFontFamily, setEditorFontFamily,
-    editorFontSize, setEditorFontSize,
-    editorWidth, setEditorWidth,
+    theme,
+    setTheme,
+    editorFontFamily,
+    setEditorFontFamily,
+    editorFontSize,
+    setEditorFontSize,
+    editorWidth,
+    setEditorWidth,
+  } = useSettingsStore();
+
+  const themes: { value: ThemeMode; label: string; swatch: 'paper' | 'dark' | 'classic' }[] = [
+    { value: 'paper', label: 'Paper', swatch: 'paper' },
+    { value: 'dark', label: 'Ink', swatch: 'dark' },
+    { value: 'classic', label: 'Classic', swatch: 'classic' },
+  ];
+
+  const fonts: { value: EditorFontFamily; label: string; family: string }[] = [
+    { value: 'serif', label: 'Serif', family: "'Source Serif 4', Georgia, serif" },
+    { value: 'sans-serif', label: 'Sans', family: "'Inter', sans-serif" },
+    { value: 'mono', label: 'Mono', family: "'JetBrains Mono', monospace" },
+  ];
+
+  return (
+    <>
+      <h4>Theme</h4>
+      <div className="inkwell-theme-swatches">
+        {themes.map((t) => (
+          <button
+            key={t.value}
+            type="button"
+            className={`inkwell-theme-swatch ${t.swatch} ${theme === t.value ? 'on' : ''}`}
+            onClick={() => setTheme(t.value)}
+            aria-pressed={theme === t.value}
+          >
+            <div className="inkwell-theme-swatch-prv">
+              <div className="bar" />
+              <div className="ln" />
+              <div className="ln" />
+              <div className="ln" />
+            </div>
+            <div className="inkwell-theme-swatch-name">{t.label}</div>
+          </button>
+        ))}
+      </div>
+
+      <div className="inkwell-setting-row" style={{ marginTop: 10 }}>
+        <div>
+          <div className="inkwell-setting-label">Content width</div>
+          <div className="inkwell-setting-desc">
+            Width of the centered page on the canvas.
+          </div>
+        </div>
+        <div className="inkwell-segmented">
+          {(['narrow', 'default', 'wide', 'full'] as EditorWidth[]).map((w) => (
+            <button
+              key={w}
+              type="button"
+              className={`inkwell-segmented-option ${editorWidth === w ? 'on' : ''}`}
+              onClick={() => setEditorWidth(w)}
+            >
+              {w[0].toUpperCase() + w.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <h4>Typography</h4>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Body font</div>
+          <div className="inkwell-setting-desc">
+            The face used for document text and titles.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {fonts.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              className={`inkwell-font-chip ${editorFontFamily === f.value ? 'on' : ''}`}
+              onClick={() => setEditorFontFamily(f.value)}
+              aria-pressed={editorFontFamily === f.value}
+            >
+              <div className="inkwell-font-chip-big" style={{ fontFamily: f.family }}>
+                Aa
+              </div>
+              <div className="inkwell-font-chip-name">{f.label}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Base text size</div>
+          <div className="inkwell-setting-desc">Editor body size. The ribbon stays fixed.</div>
+        </div>
+        <div className="inkwell-segmented">
+          {(['small', 'default', 'large', 'xl'] as EditorFontSize[]).map((s) => (
+            <button
+              key={s}
+              type="button"
+              className={`inkwell-segmented-option ${editorFontSize === s ? 'on' : ''}`}
+              onClick={() => setEditorFontSize(s)}
+            >
+              {s === 'default' ? 'Med' : s === 'xl' ? 'XL' : s[0].toUpperCase() + s.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Editor ───────────────────────────────────────────────────────────────
+
+function EditorSection() {
+  const {
+    autoSaveEnabled,
+    setAutoSaveEnabled,
+    autoSaveIntervalMs,
+    setAutoSaveIntervalMs,
+    spellCheck,
+    setSpellCheck,
+    showWordCount,
+    setShowWordCount,
+    showCharCount,
+    setShowCharCount,
   } = useSettingsStore();
 
   return (
     <>
-      <div className="inkwell-settings-section">
-        <div className="inkwell-settings-section-title">Theme</div>
+      <h4>Editor</h4>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Spellcheck</div>
+          <div className="inkwell-setting-desc">Browser-native, language-aware.</div>
+        </div>
+        <button
+          type="button"
+          className={`inkwell-toggle ${spellCheck ? 'on' : ''}`}
+          onClick={() => setSpellCheck(!spellCheck)}
+          role="switch"
+          aria-checked={spellCheck}
+          aria-label="Spellcheck"
+        />
+      </div>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Show word count</div>
+        </div>
+        <button
+          type="button"
+          className={`inkwell-toggle ${showWordCount ? 'on' : ''}`}
+          onClick={() => setShowWordCount(!showWordCount)}
+          role="switch"
+          aria-checked={showWordCount}
+        />
+      </div>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Show character count</div>
+        </div>
+        <button
+          type="button"
+          className={`inkwell-toggle ${showCharCount ? 'on' : ''}`}
+          onClick={() => setShowCharCount(!showCharCount)}
+          role="switch"
+          aria-checked={showCharCount}
+        />
+      </div>
+
+      <h4>Autosave</h4>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Autosave</div>
+          <div className="inkwell-setting-desc">Debounced after typing stops.</div>
+        </div>
+        <button
+          type="button"
+          className={`inkwell-toggle ${autoSaveEnabled ? 'on' : ''}`}
+          onClick={() => setAutoSaveEnabled(!autoSaveEnabled)}
+          role="switch"
+          aria-checked={autoSaveEnabled}
+        />
+      </div>
+      {autoSaveEnabled && (
         <div className="inkwell-setting-row">
-          <div>
-            <div className="inkwell-setting-label">Color theme</div>
-            <div className="inkwell-setting-desc">Choose light, dark, or match your system</div>
-          </div>
-          <div className="inkwell-theme-group">
-            {(['light', 'system', 'dark'] as ThemeMode[]).map((mode) => (
+          <div className="inkwell-setting-label">Interval</div>
+          <div className="inkwell-segmented">
+            {([10_000, 30_000, 60_000, 120_000, 300_000] as AutoSaveInterval[]).map((iv) => (
               <button
-                key={mode}
-                className={`inkwell-theme-option ${theme === mode ? 'inkwell-theme-option-active' : ''}`}
-                onClick={() => setTheme(mode)}
+                key={iv}
+                type="button"
+                className={`inkwell-segmented-option ${autoSaveIntervalMs === iv ? 'on' : ''}`}
+                onClick={() => setAutoSaveIntervalMs(iv)}
               >
-                {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                {iv >= 60_000 ? `${iv / 60_000}m` : `${iv / 1000}s`}
               </button>
             ))}
           </div>
         </div>
-      </div>
-
-      <div className="inkwell-settings-section">
-        <div className="inkwell-settings-section-title">Editor</div>
-
-        <div className="inkwell-setting-row">
-          <div className="inkwell-setting-label">Font family</div>
-          <select
-            className="inkwell-setting-select"
-            value={editorFontFamily}
-            onChange={(e) => setEditorFontFamily(e.target.value as EditorFontFamily)}
-          >
-            <option value="system">System Default</option>
-            <option value="serif">Serif</option>
-            <option value="sans-serif">Sans-serif</option>
-            <option value="mono">Monospace</option>
-          </select>
-        </div>
-
-        <div className="inkwell-setting-row">
-          <div className="inkwell-setting-label">Font size</div>
-          <select
-            className="inkwell-setting-select"
-            value={editorFontSize}
-            onChange={(e) => setEditorFontSize(e.target.value as EditorFontSize)}
-          >
-            <option value="small">Small (14px)</option>
-            <option value="default">Default (18px)</option>
-            <option value="large">Large (20px)</option>
-            <option value="xl">Extra Large (24px)</option>
-          </select>
-        </div>
-
-        <div className="inkwell-setting-row">
-          <div className="inkwell-setting-label">Content width</div>
-          <select
-            className="inkwell-setting-select"
-            value={editorWidth}
-            onChange={(e) => setEditorWidth(e.target.value as EditorWidth)}
-          >
-            <option value="narrow">Narrow (640px)</option>
-            <option value="default">Default (896px)</option>
-            <option value="wide">Wide (1152px)</option>
-            <option value="full">Full width</option>
-          </select>
-        </div>
-      </div>
+      )}
     </>
   );
 }
 
-// ── Editor Tab ──
+// ── AI & Privacy ─────────────────────────────────────────────────────────
 
-function EditorTab() {
-  const {
-    autoSaveEnabled, setAutoSaveEnabled,
-    autoSaveIntervalMs, setAutoSaveIntervalMs,
-    spellCheck, setSpellCheck,
-    showWordCount, setShowWordCount,
-    showCharCount, setShowCharCount,
-  } = useSettingsStore();
-
-  return (
-    <>
-      <div className="inkwell-settings-section">
-        <div className="inkwell-settings-section-title">Auto-save</div>
-
-        <div className="inkwell-setting-row">
-          <div>
-            <div className="inkwell-setting-label">Auto-save documents</div>
-            <div className="inkwell-setting-desc">Automatically save changes at regular intervals</div>
-          </div>
-          <button
-            className={`inkwell-toggle ${autoSaveEnabled ? 'inkwell-toggle-active' : ''}`}
-            onClick={() => setAutoSaveEnabled(!autoSaveEnabled)}
-            role="switch"
-            aria-checked={autoSaveEnabled}
-            aria-label="Auto-save"
-          />
-        </div>
-
-        {autoSaveEnabled && (
-          <div className="inkwell-setting-row">
-            <div className="inkwell-setting-label">Save interval</div>
-            <select
-              className="inkwell-setting-select"
-              value={autoSaveIntervalMs}
-              onChange={(e) => setAutoSaveIntervalMs(Number(e.target.value) as AutoSaveInterval)}
-            >
-              <option value={10_000}>10 seconds</option>
-              <option value={30_000}>30 seconds</option>
-              <option value={60_000}>1 minute</option>
-              <option value={120_000}>2 minutes</option>
-              <option value={300_000}>5 minutes</option>
-            </select>
-          </div>
-        )}
-      </div>
-
-      <div className="inkwell-settings-section">
-        <div className="inkwell-settings-section-title">Display</div>
-
-        <div className="inkwell-setting-row">
-          <div className="inkwell-setting-label">Spell check</div>
-          <button
-            className={`inkwell-toggle ${spellCheck ? 'inkwell-toggle-active' : ''}`}
-            onClick={() => setSpellCheck(!spellCheck)}
-            role="switch"
-            aria-checked={spellCheck}
-            aria-label="Spell check"
-          />
-        </div>
-
-        <div className="inkwell-setting-row">
-          <div className="inkwell-setting-label">Show word count</div>
-          <button
-            className={`inkwell-toggle ${showWordCount ? 'inkwell-toggle-active' : ''}`}
-            onClick={() => setShowWordCount(!showWordCount)}
-            role="switch"
-            aria-checked={showWordCount}
-            aria-label="Show word count"
-          />
-        </div>
-
-        <div className="inkwell-setting-row">
-          <div className="inkwell-setting-label">Show character count</div>
-          <button
-            className={`inkwell-toggle ${showCharCount ? 'inkwell-toggle-active' : ''}`}
-            onClick={() => setShowCharCount(!showCharCount)}
-            role="switch"
-            aria-checked={showCharCount}
-            aria-label="Show character count"
-          />
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ── AI Tab ──
-
-function AITab() {
+function AISection() {
   const aiProvider = useSettingsStore((s) => s.aiProvider);
   const setAiProvider = useSettingsStore((s) => s.setAiProvider);
-  const claudeApiKey = useSettingsStore((s) => (typeof s.claudeApiKey === 'string' ? s.claudeApiKey : ''));
+  const claudeApiKey = useSettingsStore((s) =>
+    typeof s.claudeApiKey === 'string' ? s.claudeApiKey : '',
+  );
   const setClaudeApiKey = useSettingsStore((s) => s.setClaudeApiKey);
   const ollamaBaseUrl = useSettingsStore((s) => s.ollamaBaseUrl);
   const setOllamaBaseUrl = useSettingsStore((s) => s.setOllamaBaseUrl);
@@ -307,13 +388,14 @@ function AITab() {
   const ghostTextEnabled = useSettingsStore((s) => Boolean(s.ghostTextEnabled));
   const setGhostTextEnabled = useSettingsStore((s) => s.setGhostTextEnabled);
   const ghostTextDebounceMs = useSettingsStore((s) =>
-    s.ghostTextDebounceMs === 300 || s.ghostTextDebounceMs === 500 || s.ghostTextDebounceMs === 800
+    s.ghostTextDebounceMs === 300 ||
+    s.ghostTextDebounceMs === 500 ||
+    s.ghostTextDebounceMs === 800
       ? s.ghostTextDebounceMs
       : 500,
   );
   const setGhostTextDebounceMs = useSettingsStore((s) => s.setGhostTextDebounceMs);
 
-  // Claude key state
   const [localKey, setLocalKey] = useState<string>(claudeApiKey);
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -322,21 +404,20 @@ function AITab() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const keyChanged = localKey !== claudeApiKey;
 
-  // Ollama state
   const [localOllamaUrl, setLocalOllamaUrl] = useState(ollamaBaseUrl);
   const [ollamaModels, setOllamaModels] = useState<OllamaModelInfo[]>([]);
-  const [ollamaHealth, setOllamaHealth] = useState<'connected' | 'disconnected' | 'checking'>('checking');
+  const [ollamaHealth, setOllamaHealth] = useState<'connected' | 'disconnected' | 'checking'>(
+    'checking',
+  );
   const [ollamaLoadingModels, setOllamaLoadingModels] = useState(false);
   const ollamaUrlChanged = localOllamaUrl !== ollamaBaseUrl;
 
   useEffect(() => {
     setLocalKey(claudeApiKey);
   }, [claudeApiKey]);
-
   useEffect(() => {
     setLocalOllamaUrl(ollamaBaseUrl);
   }, [ollamaBaseUrl]);
-
   useEffect(() => {
     return () => {
       if (saveTimerRef.current) {
@@ -345,31 +426,32 @@ function AITab() {
     };
   }, []);
 
-  // Check Ollama health and load models when provider is ollama
-  const checkOllamaAndLoadModels = useCallback(async (url: string) => {
-    setOllamaHealth('checking');
-    setOllamaLoadingModels(true);
-    try {
-      const healthy = await OllamaClient.checkHealth(url);
-      if (healthy) {
-        setOllamaHealth('connected');
-        const models = await OllamaClient.listModels(url);
-        setOllamaModels(models);
-        // Auto-select first model if none selected
-        if (!ollamaModel && models.length > 0) {
-          setOllamaModel(models[0].name);
+  const checkOllamaAndLoadModels = useCallback(
+    async (url: string) => {
+      setOllamaHealth('checking');
+      setOllamaLoadingModels(true);
+      try {
+        const healthy = await OllamaClient.checkHealth(url);
+        if (healthy) {
+          setOllamaHealth('connected');
+          const models = await OllamaClient.listModels(url);
+          setOllamaModels(models);
+          if (!ollamaModel && models.length > 0) {
+            setOllamaModel(models[0].name);
+          }
+        } else {
+          setOllamaHealth('disconnected');
+          setOllamaModels([]);
         }
-      } else {
+      } catch {
         setOllamaHealth('disconnected');
         setOllamaModels([]);
+      } finally {
+        setOllamaLoadingModels(false);
       }
-    } catch {
-      setOllamaHealth('disconnected');
-      setOllamaModels([]);
-    } finally {
-      setOllamaLoadingModels(false);
-    }
-  }, [ollamaModel, setOllamaModel]);
+    },
+    [ollamaModel, setOllamaModel],
+  );
 
   useEffect(() => {
     if (aiProvider === 'ollama') {
@@ -381,7 +463,6 @@ function AITab() {
     const trimmed = localKey.trim();
     setSaveError(null);
     setSaving(true);
-
     try {
       if (isTauriEnvironment()) {
         const persisted = await saveClaudeApiKeyToSecureStorage(trimmed);
@@ -390,13 +471,10 @@ function AITab() {
           return;
         }
       }
-
       setClaudeApiKey(trimmed);
       destroyDocumentAI();
       setSaved(true);
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-      }
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => setSaved(false), 2000);
     } finally {
       setSaving(false);
@@ -410,52 +488,63 @@ function AITab() {
     void checkOllamaAndLoadModels(trimmed);
   }, [localOllamaUrl, setOllamaBaseUrl, checkOllamaAndLoadModels]);
 
-  const handleProviderChange = useCallback((provider: AIProvider) => {
-    setAiProvider(provider);
-    destroyDocumentAI();
-  }, [setAiProvider]);
+  const handleProviderChange = useCallback(
+    (provider: AIProvider) => {
+      setAiProvider(provider);
+      destroyDocumentAI();
+    },
+    [setAiProvider],
+  );
 
-  const handleOllamaModelChange = useCallback((model: string) => {
-    setOllamaModel(model);
-    destroyDocumentAI();
-  }, [setOllamaModel]);
+  const handleOllamaModelChange = useCallback(
+    (model: string) => {
+      setOllamaModel(model);
+      destroyDocumentAI();
+    },
+    [setOllamaModel],
+  );
 
-  const healthDot = ollamaHealth === 'connected'
-    ? '#22c55e'
-    : ollamaHealth === 'disconnected'
-      ? '#ef4444'
-      : '#9ca3af';
+  const healthDot =
+    ollamaHealth === 'connected'
+      ? '#22c55e'
+      : ollamaHealth === 'disconnected'
+        ? '#ef4444'
+        : '#9ca3af';
 
   return (
     <>
-      <div className="inkwell-settings-section">
-        <div className="inkwell-settings-section-title">AI Provider</div>
-        <div className="inkwell-setting-row">
-          <div>
-            <div className="inkwell-setting-label">Provider</div>
-            <div className="inkwell-setting-desc">Choose between cloud (Claude) or local (Ollama) AI</div>
+      <h4>AI Provider</h4>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Provider</div>
+          <div className="inkwell-setting-desc">
+            Cloud (Claude) for top quality, or local (Ollama) for privacy and offline.
           </div>
-          <select
-            className="inkwell-setting-select"
-            value={aiProvider}
-            onChange={(e) => handleProviderChange(e.target.value as AIProvider)}
-          >
-            <option value="claude">Claude (Anthropic)</option>
-            <option value="ollama">Ollama (Local)</option>
-          </select>
+        </div>
+        <div className="inkwell-segmented">
+          {(['claude', 'ollama'] as AIProvider[]).map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={`inkwell-segmented-option ${aiProvider === p ? 'on' : ''}`}
+              onClick={() => handleProviderChange(p)}
+            >
+              {p === 'claude' ? 'Claude' : 'Ollama'}
+            </button>
+          ))}
         </div>
       </div>
 
       {aiProvider === 'claude' && (
-        <div className="inkwell-settings-section">
-          <div className="inkwell-settings-section-title">Claude Configuration</div>
-
-          <div style={{ marginBottom: '0.75rem' }}>
-            <div className="inkwell-setting-label" style={{ marginBottom: '0.375rem' }}>Claude API Key</div>
-            <div className="inkwell-setting-desc" style={{ marginBottom: '0.5rem' }}>
-              Inkwell uses Anthropic API access. This overrides the NEXT_PUBLIC_CLAUDE_API_KEY environment variable.
+        <>
+          <div style={{ marginTop: 12 }}>
+            <div className="inkwell-setting-label" style={{ marginBottom: 6 }}>
+              Claude API key
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div className="inkwell-setting-desc" style={{ marginBottom: 8 }}>
+              Stored in your system keychain when running in the desktop app.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
               <input
                 type={showKey ? 'text' : 'password'}
                 className="inkwell-setting-input"
@@ -467,39 +556,42 @@ function AITab() {
               <button
                 className="inkwell-btn-secondary"
                 onClick={() => setShowKey(!showKey)}
-                style={{ whiteSpace: 'nowrap', padding: '0.375rem 0.625rem' }}
+                style={{ whiteSpace: 'nowrap' }}
               >
                 {showKey ? 'Hide' : 'Show'}
               </button>
               <button
                 className="inkwell-btn-primary"
-                onClick={() => {
-                  void handleSaveKey();
-                }}
+                onClick={() => void handleSaveKey()}
                 disabled={!keyChanged || saving}
                 style={{ whiteSpace: 'nowrap' }}
               >
-                {saving ? 'Saving...' : saved ? 'Saved' : 'Save'}
+                {saving ? 'Saving…' : saved ? 'Saved' : 'Save'}
               </button>
             </div>
             {saveError && (
-              <div className="inkwell-setting-desc" style={{ color: '#dc2626', marginTop: '0.5rem' }}>
+              <div
+                className="inkwell-setting-desc"
+                style={{ color: 'var(--diff-del)', marginTop: 8 }}
+              >
                 {saveError}
               </div>
             )}
           </div>
-        </div>
+        </>
       )}
 
       {aiProvider === 'ollama' && (
-        <div className="inkwell-settings-section">
-          <div className="inkwell-settings-section-title">Ollama Configuration</div>
-
+        <>
           <div className="inkwell-setting-row">
             <div>
-              <div className="inkwell-setting-label">Connection status</div>
+              <div className="inkwell-setting-label">Connection</div>
               <div className="inkwell-setting-desc">
-                {ollamaHealth === 'checking' ? 'Checking...' : ollamaHealth === 'connected' ? 'Connected' : 'Disconnected'}
+                {ollamaHealth === 'checking'
+                  ? 'Checking…'
+                  : ollamaHealth === 'connected'
+                    ? 'Connected'
+                    : 'Disconnected'}
               </div>
             </div>
             <span
@@ -513,53 +605,46 @@ function AITab() {
               aria-label={`Ollama ${ollamaHealth}`}
             />
           </div>
-
-          <div style={{ marginBottom: '0.75rem' }}>
-            <div className="inkwell-setting-label" style={{ marginBottom: '0.375rem' }}>Server URL</div>
-            <div className="inkwell-setting-desc" style={{ marginBottom: '0.5rem' }}>
-              The base URL where Ollama is running.
+          <div style={{ marginTop: 6 }}>
+            <div className="inkwell-setting-label" style={{ marginBottom: 6 }}>
+              Server URL
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: 8 }}>
               <input
                 type="text"
                 className="inkwell-setting-input"
                 value={localOllamaUrl}
                 onChange={(e) => setLocalOllamaUrl(e.target.value)}
                 placeholder="http://localhost:11434"
-                aria-label="Ollama server URL"
               />
               <button
                 className="inkwell-btn-primary"
                 onClick={handleSaveOllamaUrl}
                 disabled={!ollamaUrlChanged}
-                style={{ whiteSpace: 'nowrap' }}
               >
                 Save
               </button>
             </div>
           </div>
-
           <div className="inkwell-setting-row">
             <div>
               <div className="inkwell-setting-label">Model</div>
               <div className="inkwell-setting-desc">
                 {ollamaModels.length === 0 && ollamaHealth === 'connected'
-                  ? 'No models found. Pull a model with: ollama pull llama3.2'
+                  ? 'No models. Try: ollama pull llama3.2'
                   : ollamaModels.length === 0
-                    ? 'Connect to Ollama to see available models'
+                    ? 'Connect to see models'
                     : `${ollamaModels.length} model${ollamaModels.length !== 1 ? 's' : ''} available`}
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <select
                 className="inkwell-setting-select"
                 value={ollamaModel}
                 onChange={(e) => handleOllamaModelChange(e.target.value)}
                 disabled={ollamaModels.length === 0}
               >
-                {ollamaModels.length === 0 && (
-                  <option value="">No models</option>
-                )}
+                {ollamaModels.length === 0 && <option value="">No models</option>}
                 {ollamaModels.map((m) => (
                   <option key={m.name} value={m.name}>
                     {m.name}
@@ -570,57 +655,90 @@ function AITab() {
                 className="inkwell-btn-secondary"
                 onClick={() => void checkOllamaAndLoadModels(ollamaBaseUrl)}
                 disabled={ollamaLoadingModels}
-                style={{ whiteSpace: 'nowrap', padding: '0.375rem 0.625rem' }}
               >
-                {ollamaLoadingModels ? 'Loading...' : 'Refresh'}
+                {ollamaLoadingModels ? 'Loading…' : 'Refresh'}
               </button>
             </div>
           </div>
-        </div>
+        </>
       )}
 
-      <div className="inkwell-settings-section">
-        <div className="inkwell-settings-section-title">Inline Suggestions</div>
-
-        <div className="inkwell-setting-row">
-          <div>
-            <div className="inkwell-setting-label">Ghost text suggestions</div>
-            <div className="inkwell-setting-desc">Show AI-powered inline completions as you type</div>
+      <h4>Inline suggestions</h4>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Ghost text</div>
+          <div className="inkwell-setting-desc">
+            Local model · ~180ms · pressed Tab to accept.
           </div>
-          <button
-            className={`inkwell-toggle ${ghostTextEnabled ? 'inkwell-toggle-active' : ''}`}
-            onClick={() => setGhostTextEnabled(!ghostTextEnabled)}
-            role="switch"
-            aria-checked={ghostTextEnabled}
-            aria-label="Ghost text suggestions"
-          />
         </div>
-
-        {ghostTextEnabled && (
-          <div className="inkwell-setting-row">
-            <div className="inkwell-setting-label">Suggestion delay</div>
-            <select
-              className="inkwell-setting-select"
-              value={ghostTextDebounceMs}
-              onChange={(e) => setGhostTextDebounceMs(Number(e.target.value) as GhostTextDelay)}
-            >
-              <option value={300}>Fast (300ms)</option>
-              <option value={500}>Default (500ms)</option>
-              <option value={800}>Slow (800ms)</option>
-            </select>
+        <button
+          type="button"
+          className={`inkwell-toggle ${ghostTextEnabled ? 'on' : ''}`}
+          onClick={() => setGhostTextEnabled(!ghostTextEnabled)}
+          role="switch"
+          aria-checked={ghostTextEnabled}
+        />
+      </div>
+      {ghostTextEnabled && (
+        <div className="inkwell-setting-row">
+          <div className="inkwell-setting-label">Suggestion delay</div>
+          <div className="inkwell-segmented">
+            {([300, 500, 800] as GhostTextDelay[]).map((d) => (
+              <button
+                key={d}
+                type="button"
+                className={`inkwell-segmented-option ${ghostTextDebounceMs === d ? 'on' : ''}`}
+                onClick={() => setGhostTextDebounceMs(d)}
+              >
+                {d === 300 ? 'Fast' : d === 500 ? 'Default' : 'Slow'}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ── Voice ────────────────────────────────────────────────────────────────
+
+function VoiceSection() {
+  return (
+    <>
+      <h4>Voice</h4>
+      <div className="inkwell-setting-row">
+        <div className="inkwell-setting-label">Microphone</div>
+        <span className="inkwell-kbd">System default</span>
+      </div>
+      <div className="inkwell-setting-row">
+        <div className="inkwell-setting-label">Language</div>
+        <div className="inkwell-segmented">
+          <button type="button" className="inkwell-segmented-option on">
+            English (US)
+          </button>
+          <button type="button" className="inkwell-segmented-option">
+            Auto-detect
+          </button>
+        </div>
+      </div>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Clean up with Claude</div>
+          <div className="inkwell-setting-desc">
+            Refine raw Whisper transcripts before inserting.
+          </div>
+        </div>
+        <button type="button" className="inkwell-toggle on" role="switch" aria-checked />
       </div>
     </>
   );
 }
 
-// ── Data Tab ──
+// ── Data ─────────────────────────────────────────────────────────────────
 
-function DataTab() {
+function DataSection() {
   const { documents } = useDocumentStore();
   const [confirmClear, setConfirmClear] = useState(false);
-
   const activeDocuments = documents.filter((d) => d.deletedAt === null);
 
   const handleExportAll = useCallback(() => {
@@ -639,7 +757,6 @@ function DataTab() {
   }, [activeDocuments]);
 
   const handleClearAll = useCallback(async () => {
-    // Delete all documents from IndexedDB
     const store = useDocumentStore.getState();
     for (const doc of documents) {
       await store.permanentDelete(doc.id);
@@ -649,151 +766,169 @@ function DataTab() {
 
   return (
     <>
-      <div className="inkwell-settings-section">
-        <div className="inkwell-settings-section-title">Export</div>
-        <div className="inkwell-setting-row">
-          <div>
-            <div className="inkwell-setting-label">Export all documents</div>
-            <div className="inkwell-setting-desc">
-              Download all {activeDocuments.length} document{activeDocuments.length !== 1 ? 's' : ''} as a single Markdown file
-            </div>
+      <h4>Export</h4>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Export all documents</div>
+          <div className="inkwell-setting-desc">
+            Download all {activeDocuments.length} document
+            {activeDocuments.length !== 1 ? 's' : ''} as Markdown.
           </div>
-          <button
-            className="inkwell-btn-secondary"
-            onClick={handleExportAll}
-            disabled={activeDocuments.length === 0}
-          >
-            Export
-          </button>
         </div>
+        <button
+          className="inkwell-btn-secondary"
+          onClick={handleExportAll}
+          disabled={activeDocuments.length === 0}
+        >
+          Export
+        </button>
       </div>
 
-      <div className="inkwell-settings-section">
-        <div className="inkwell-settings-section-title">Danger Zone</div>
-        <div className="inkwell-setting-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-          <div>
-            <div className="inkwell-setting-label">Delete all documents</div>
-            <div className="inkwell-setting-desc">
-              Permanently delete all documents including trash. This cannot be undone.
-            </div>
+      <h4>Danger zone</h4>
+      <div
+        className="inkwell-setting-row"
+        style={{ flexDirection: 'column', alignItems: 'flex-start' }}
+      >
+        <div>
+          <div className="inkwell-setting-label">Delete all documents</div>
+          <div className="inkwell-setting-desc">
+            Permanently delete all documents including trash.
           </div>
-          {!confirmClear ? (
-            <button
-              className="inkwell-btn-danger"
-              onClick={() => setConfirmClear(true)}
-              disabled={documents.length === 0}
-              style={{ marginTop: '0.5rem' }}
-            >
-              Delete All Documents
-            </button>
-          ) : (
-            <div className="inkwell-confirm-dialog">
-              <span className="inkwell-confirm-text">Are you sure?</span>
-              <button className="inkwell-btn-danger" onClick={handleClearAll}>
-                Yes, delete all
-              </button>
-              <button className="inkwell-btn-secondary" onClick={() => setConfirmClear(false)}>
-                Cancel
-              </button>
-            </div>
-          )}
         </div>
+        {!confirmClear ? (
+          <button
+            className="inkwell-btn-danger"
+            onClick={() => setConfirmClear(true)}
+            disabled={documents.length === 0}
+            style={{ marginTop: 8 }}
+          >
+            Delete All
+          </button>
+        ) : (
+          <div className="inkwell-confirm-dialog">
+            <span className="inkwell-confirm-text">Are you sure?</span>
+            <button className="inkwell-btn-danger" onClick={handleClearAll}>
+              Yes, delete
+            </button>
+            <button
+              className="inkwell-btn-secondary"
+              onClick={() => setConfirmClear(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
       </div>
     </>
   );
 }
 
-// ── About Tab ──
+// ── Shortcuts ────────────────────────────────────────────────────────────
 
-function AboutTab() {
+function ShortcutsSection() {
+  const rows: [string, ...string[]][] = [
+    ['Toggle sidebar', 'Ctrl', '\\'],
+    ['Open AI chat', 'Ctrl', 'Shift', 'L'],
+    ['Slash commands', '/'],
+    ['Bold', 'Ctrl', 'B'],
+    ['Italic', 'Ctrl', 'I'],
+    ['Underline', 'Ctrl', 'U'],
+    ['Accept ghost text', 'Tab'],
+  ];
+
+  return (
+    <>
+      <h4>Keyboard</h4>
+      {rows.map(([label, ...keys], i) => (
+        <div className="inkwell-setting-row" key={i}>
+          <div className="inkwell-setting-label">{label}</div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {keys.map((k, j) => (
+              <span key={j} className="inkwell-kbd">
+                {k}
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+// ── About ────────────────────────────────────────────────────────────────
+
+function AboutSection() {
   const { resetAll, setClaudeApiKey } = useSettingsStore();
   const [confirmReset, setConfirmReset] = useState(false);
 
   return (
     <>
-      <div className="inkwell-settings-section">
-        <div className="inkwell-settings-section-title">Application</div>
-        <div className="inkwell-setting-row">
-          <div className="inkwell-setting-label">Inkwell</div>
-          <span style={{ fontSize: '0.8125rem', color: '#6b7280' }}>v0.0.1</span>
-        </div>
-        <div className="inkwell-setting-row">
-          <div className="inkwell-setting-label">Built with</div>
-          <span style={{ fontSize: '0.8125rem', color: '#6b7280' }}>Next.js, TipTap, Claude</span>
-        </div>
+      <h4>About InkWell</h4>
+      <p
+        style={{
+          fontFamily: "'Source Serif 4', serif",
+          fontSize: 15,
+          lineHeight: 1.55,
+          color: 'var(--ink-2)',
+          margin: '0 0 14px',
+          maxWidth: 460,
+        }}
+      >
+        An AI-native word processor that keeps your attention on the sentence. Local
+        inference when you want it, cloud when you need it.
+      </p>
+      <div className="inkwell-setting-row">
+        <div className="inkwell-setting-label">Version</div>
+        <span className="inkwell-kbd">0.0.1</span>
+      </div>
+      <div className="inkwell-setting-row">
+        <div className="inkwell-setting-label">Built with</div>
+        <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>Next.js · TipTap · Claude</span>
       </div>
 
-      <div className="inkwell-settings-section">
-        <div className="inkwell-settings-section-title">Keyboard Shortcuts</div>
-        <table className="inkwell-shortcuts-table">
-          <tbody>
-            <tr>
-              <td>Toggle sidebar</td>
-              <td><kbd className="inkwell-kbd">Ctrl</kbd> + <kbd className="inkwell-kbd">\</kbd></td>
-            </tr>
-            <tr>
-              <td>Bold</td>
-              <td><kbd className="inkwell-kbd">Ctrl</kbd> + <kbd className="inkwell-kbd">B</kbd></td>
-            </tr>
-            <tr>
-              <td>Italic</td>
-              <td><kbd className="inkwell-kbd">Ctrl</kbd> + <kbd className="inkwell-kbd">I</kbd></td>
-            </tr>
-            <tr>
-              <td>Underline</td>
-              <td><kbd className="inkwell-kbd">Ctrl</kbd> + <kbd className="inkwell-kbd">U</kbd></td>
-            </tr>
-            <tr>
-              <td>Accept ghost text</td>
-              <td><kbd className="inkwell-kbd">Tab</kbd></td>
-            </tr>
-            <tr>
-              <td>Slash commands</td>
-              <td><kbd className="inkwell-kbd">/</kbd></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div className="inkwell-settings-section">
-        <div className="inkwell-settings-section-title">Reset</div>
-        <div className="inkwell-setting-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-          <div>
-            <div className="inkwell-setting-label">Reset all settings</div>
-            <div className="inkwell-setting-desc">Restore all settings to their default values</div>
-          </div>
-          {!confirmReset ? (
+      <h4>Reset</h4>
+      <div
+        className="inkwell-setting-row"
+        style={{ flexDirection: 'column', alignItems: 'flex-start' }}
+      >
+        <div>
+          <div className="inkwell-setting-label">Reset all settings</div>
+          <div className="inkwell-setting-desc">Restore defaults.</div>
+        </div>
+        {!confirmReset ? (
+          <button
+            className="inkwell-btn-secondary"
+            onClick={() => setConfirmReset(true)}
+            style={{ marginTop: 8 }}
+          >
+            Reset to Defaults
+          </button>
+        ) : (
+          <div className="inkwell-confirm-dialog">
+            <span className="inkwell-confirm-text">Reset all settings?</span>
+            <button
+              className="inkwell-btn-danger"
+              onClick={() => {
+                void (async () => {
+                  if (isTauriEnvironment()) {
+                    await saveClaudeApiKeyToSecureStorage('');
+                  }
+                  setClaudeApiKey('');
+                  resetAll();
+                  setConfirmReset(false);
+                })();
+              }}
+            >
+              Yes, reset
+            </button>
             <button
               className="inkwell-btn-secondary"
-              onClick={() => setConfirmReset(true)}
-              style={{ marginTop: '0.5rem' }}
+              onClick={() => setConfirmReset(false)}
             >
-              Reset to Defaults
+              Cancel
             </button>
-          ) : (
-            <div className="inkwell-confirm-dialog">
-              <span className="inkwell-confirm-text">Reset all settings?</span>
-              <button
-                className="inkwell-btn-danger"
-                onClick={() => {
-                  void (async () => {
-                    if (isTauriEnvironment()) {
-                      await saveClaudeApiKeyToSecureStorage('');
-                    }
-                    setClaudeApiKey('');
-                    resetAll();
-                    setConfirmReset(false);
-                  })();
-                }}
-              >
-                Yes, reset
-              </button>
-              <button className="inkwell-btn-secondary" onClick={() => setConfirmReset(false)}>
-                Cancel
-              </button>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </>
   );

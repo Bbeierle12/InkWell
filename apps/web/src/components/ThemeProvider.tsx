@@ -3,33 +3,51 @@
 /**
  * ThemeProvider Component
  *
- * Reads the theme setting from the settings store and applies
- * a `data-theme` attribute on the <html> element. When set to
- * "system", listens for OS-level preference changes via matchMedia.
+ * Reads the theme setting from the settings store and applies a
+ * `data-theme` attribute on the <html> element. The InkWell palette
+ * supports three explicit themes:
+ *   - paper   (default warm cream — no data-theme attribute)
+ *   - dark    (data-theme="dark")
+ *   - classic (data-theme="classic", Word-blue/white)
+ * Legacy values "light" and "system" still resolve to paper / dark.
  */
 
 import { useEffect } from 'react';
 import { useSettingsStore } from '@/lib/settings-store';
 
-function applyTheme(resolved: 'light' | 'dark') {
-  document.documentElement.setAttribute('data-theme', resolved);
+type Resolved = 'paper' | 'dark' | 'classic';
+
+function applyTheme(resolved: Resolved) {
+  if (resolved === 'paper') {
+    document.documentElement.removeAttribute('data-theme');
+  } else {
+    document.documentElement.setAttribute('data-theme', resolved);
+  }
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const theme = useSettingsStore((s) => s.theme);
 
   useEffect(() => {
-    if (theme === 'light' || theme === 'dark') {
-      applyTheme(theme);
+    if (theme === 'paper' || theme === 'light') {
+      applyTheme('paper');
+      return;
+    }
+    if (theme === 'dark') {
+      applyTheme('dark');
+      return;
+    }
+    if (theme === 'classic') {
+      applyTheme('classic');
       return;
     }
 
-    // System preference
+    // System preference → paper or dark
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    applyTheme(mq.matches ? 'dark' : 'light');
+    applyTheme(mq.matches ? 'dark' : 'paper');
 
     const handler = (e: MediaQueryListEvent) => {
-      applyTheme(e.matches ? 'dark' : 'light');
+      applyTheme(e.matches ? 'dark' : 'paper');
     };
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);

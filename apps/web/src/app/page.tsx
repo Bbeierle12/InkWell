@@ -283,28 +283,34 @@ export default function Home() {
       />
       <div className="flex flex-1 min-h-0">
         <Sidebar editor={editor} onOpenSettings={() => setSettingsOpen(true)} />
-        <div className="flex-1 flex flex-col min-w-0">
-          <div
-            className="flex-1 mx-auto w-full p-4 md:p-8"
-            style={{
-              maxWidth: EDITOR_WIDTH_MAP[editorWidth],
-              fontFamily: FONT_FAMILY_MAP[editorFontFamily],
-              fontSize: FONT_SIZE_MAP[editorFontSize],
-            }}
-          >
-            <EditorArea
-              editor={editor}
-              hasDiffActive={hasDiffActive}
-              onAcceptDiff={acceptDiff}
-              onRejectDiff={rejectDiff}
-            />
-            {documentId && (
+        <div
+          className="flex-1 flex flex-col min-w-0"
+          style={{
+            fontFamily: FONT_FAMILY_MAP[editorFontFamily],
+            fontSize: FONT_SIZE_MAP[editorFontSize],
+            ['--inkwell-editor-max-width' as string]: EDITOR_WIDTH_MAP[editorWidth],
+          }}
+        >
+          <EditorArea
+            editor={editor}
+            hasDiffActive={hasDiffActive}
+            onAcceptDiff={acceptDiff}
+            onRejectDiff={rejectDiff}
+          />
+          {documentId && (
+            <div
+              style={{
+                padding: '8px 24px',
+                borderTop: '1px solid var(--rule)',
+                background: 'var(--page)',
+              }}
+            >
               <TagInput
                 documentId={documentId}
                 tags={documents.find((d) => d.id === documentId)?.tags ?? []}
               />
-            )}
-          </div>
+            </div>
+          )}
           <StatusBar editor={editor} />
         </div>
         <ChatPanel
