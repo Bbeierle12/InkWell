@@ -12,6 +12,7 @@ import { useMemo } from 'react';
 import type { Editor } from '@tiptap/core';
 import { EditorContent } from '@tiptap/react';
 import { useDocumentStore } from '@/lib/document-store';
+import { useSettingsStore } from '@/lib/settings-store';
 import { formatRelativeTime } from '@/lib/document-utils';
 
 interface EditorAreaProps {
@@ -42,11 +43,12 @@ export function EditorArea({
   onRejectDiff,
 }: EditorAreaProps) {
   const { title, lastSavedAt } = useDocumentStore();
+  const showRuler = useSettingsStore((s) => s.showRuler);
   const lastEdited = lastSavedAt ? formatRelativeTime(lastSavedAt) : 'just now';
 
   return (
     <div className="inkwell-canvas">
-      <Ruler />
+      {showRuler && <Ruler />}
       <div className="inkwell-canvas-scroll">
         <article className="inkwell-page" data-testid="inkwell-editor-page">
           <header

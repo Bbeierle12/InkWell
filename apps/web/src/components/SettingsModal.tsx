@@ -9,9 +9,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import {
-  useSettingsStore,
-} from '@/lib/settings-store';
+import { useSettingsStore } from '@/lib/settings-store';
 import type {
   ThemeMode,
   EditorFontFamily,
@@ -20,6 +18,9 @@ import type {
   AIProvider,
   GhostTextDelay,
   AutoSaveInterval,
+  Density,
+  AIProminence,
+  VoiceLanguage,
 } from '@/lib/settings-store';
 import { useDocumentStore } from '@/lib/document-store';
 import { editorJsonToMarkdown } from '@/lib/markdown-export';
@@ -174,7 +175,13 @@ function AppearanceSection() {
     setEditorFontSize,
     editorWidth,
     setEditorWidth,
+    density,
+    setDensity,
   } = useSettingsStore();
+
+  // Map legacy theme values to a swatch for display.
+  const effectiveTheme: 'paper' | 'dark' | 'classic' =
+    theme === 'dark' ? 'dark' : theme === 'classic' ? 'classic' : 'paper';
 
   const themes: { value: ThemeMode; label: string; swatch: 'paper' | 'dark' | 'classic' }[] = [
     { value: 'paper', label: 'Paper', swatch: 'paper' },
@@ -183,6 +190,7 @@ function AppearanceSection() {
   ];
 
   const fonts: { value: EditorFontFamily; label: string; family: string }[] = [
+    { value: 'system', label: 'System', family: 'system-ui, sans-serif' },
     { value: 'serif', label: 'Serif', family: "'Source Serif 4', Georgia, serif" },
     { value: 'sans-serif', label: 'Sans', family: "'Inter', sans-serif" },
     { value: 'mono', label: 'Mono', family: "'JetBrains Mono', monospace" },
@@ -196,9 +204,11 @@ function AppearanceSection() {
           <button
             key={t.value}
             type="button"
-            className={`inkwell-theme-swatch ${t.swatch} ${theme === t.value ? 'on' : ''}`}
+            className={`inkwell-theme-swatch ${t.swatch} ${
+              effectiveTheme === t.swatch ? 'on' : ''
+            }`}
             onClick={() => setTheme(t.value)}
-            aria-pressed={theme === t.value}
+            aria-pressed={effectiveTheme === t.swatch}
           >
             <div className="inkwell-theme-swatch-prv">
               <div className="bar" />
@@ -212,6 +222,27 @@ function AppearanceSection() {
       </div>
 
       <div className="inkwell-setting-row" style={{ marginTop: 10 }}>
+        <div>
+          <div className="inkwell-setting-label">Density</div>
+          <div className="inkwell-setting-desc">
+            Spacing across the ribbon, sidebar, and status bar.
+          </div>
+        </div>
+        <div className="inkwell-segmented">
+          {(['compact', 'comfortable', 'spacious'] as Density[]).map((d) => (
+            <button
+              key={d}
+              type="button"
+              className={`inkwell-segmented-option ${density === d ? 'on' : ''}`}
+              onClick={() => setDensity(d)}
+            >
+              {d[0].toUpperCase() + d.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="inkwell-setting-row">
         <div>
           <div className="inkwell-setting-label">Content width</div>
           <div className="inkwell-setting-desc">
@@ -293,6 +324,12 @@ function EditorSection() {
     setShowWordCount,
     showCharCount,
     setShowCharCount,
+    smartQuotes,
+    setSmartQuotes,
+    typewriterScrolling,
+    setTypewriterScrolling,
+    showRuler,
+    setShowRuler,
   } = useSettingsStore();
 
   return (
@@ -310,6 +347,54 @@ function EditorSection() {
           role="switch"
           aria-checked={spellCheck}
           aria-label="Spellcheck"
+        />
+      </div>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Smart quotes &amp; dashes</div>
+          <div className="inkwell-setting-desc">
+            Convert &quot;...&quot; to curly quotes and -- to em-dash.
+          </div>
+        </div>
+        <button
+          type="button"
+          className={`inkwell-toggle ${smartQuotes ? 'on' : ''}`}
+          onClick={() => setSmartQuotes(!smartQuotes)}
+          role="switch"
+          aria-checked={smartQuotes}
+          aria-label="Smart quotes and dashes"
+        />
+      </div>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Typewriter scrolling</div>
+          <div className="inkwell-setting-desc">
+            Keep the active line centered vertically.
+          </div>
+        </div>
+        <button
+          type="button"
+          className={`inkwell-toggle ${typewriterScrolling ? 'on' : ''}`}
+          onClick={() => setTypewriterScrolling(!typewriterScrolling)}
+          role="switch"
+          aria-checked={typewriterScrolling}
+          aria-label="Typewriter scrolling"
+        />
+      </div>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Show ruler</div>
+          <div className="inkwell-setting-desc">
+            The horizontal inch ruler above the page.
+          </div>
+        </div>
+        <button
+          type="button"
+          className={`inkwell-toggle ${showRuler ? 'on' : ''}`}
+          onClick={() => setShowRuler(!showRuler)}
+          role="switch"
+          aria-checked={showRuler}
+          aria-label="Show ruler"
         />
       </div>
       <div className="inkwell-setting-row">
@@ -377,6 +462,14 @@ function EditorSection() {
 function AISection() {
   const aiProvider = useSettingsStore((s) => s.aiProvider);
   const setAiProvider = useSettingsStore((s) => s.setAiProvider);
+  const aiProminence = useSettingsStore((s) => s.aiProminence);
+  const setAIProminence = useSettingsStore((s) => s.setAIProminence);
+  const diffPreviewEnabled = useSettingsStore((s) => s.diffPreviewEnabled);
+  const setDiffPreviewEnabled = useSettingsStore((s) => s.setDiffPreviewEnabled);
+  const defaultLocalInference = useSettingsStore((s) => s.defaultLocalInference);
+  const setDefaultLocalInference = useSettingsStore((s) => s.setDefaultLocalInference);
+  const privacyCanary = useSettingsStore((s) => s.privacyCanary);
+  const setPrivacyCanary = useSettingsStore((s) => s.setPrivacyCanary);
   const claudeApiKey = useSettingsStore((s) =>
     typeof s.claudeApiKey === 'string' ? s.claudeApiKey : '',
   );
@@ -663,6 +756,45 @@ function AISection() {
         </>
       )}
 
+      <h4>Presence</h4>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">AI prominence</div>
+          <div className="inkwell-setting-desc">
+            Invisible hides ghost text and suggestions until invoked. Ambient shows
+            subtle state. Prominent surfaces a reading-along indicator.
+          </div>
+        </div>
+        <div className="inkwell-segmented">
+          {(['invisible', 'ambient', 'prominent'] as AIProminence[]).map((m) => (
+            <button
+              key={m}
+              type="button"
+              className={`inkwell-segmented-option ${aiProminence === m ? 'on' : ''}`}
+              onClick={() => setAIProminence(m)}
+            >
+              {m[0].toUpperCase() + m.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Diff preview</div>
+          <div className="inkwell-setting-desc">
+            Show red/green changes before committing AI rewrites.
+          </div>
+        </div>
+        <button
+          type="button"
+          className={`inkwell-toggle ${diffPreviewEnabled ? 'on' : ''}`}
+          onClick={() => setDiffPreviewEnabled(!diffPreviewEnabled)}
+          role="switch"
+          aria-checked={diffPreviewEnabled}
+          aria-label="Diff preview"
+        />
+      </div>
+
       <h4>Inline suggestions</h4>
       <div className="inkwell-setting-row">
         <div>
@@ -696,6 +828,41 @@ function AISection() {
           </div>
         </div>
       )}
+
+      <h4>Privacy</h4>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Default to local inference</div>
+          <div className="inkwell-setting-desc">
+            New documents start in local-only mode.
+          </div>
+        </div>
+        <button
+          type="button"
+          className={`inkwell-toggle ${defaultLocalInference ? 'on' : ''}`}
+          onClick={() => setDefaultLocalInference(!defaultLocalInference)}
+          role="switch"
+          aria-checked={defaultLocalInference}
+          aria-label="Default to local inference"
+        />
+      </div>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Privacy canary</div>
+          <div className="inkwell-setting-desc">
+            Embed <span className="inkwell-kbd">CANARY_PRIVATE_DO_NOT_TRANSMIT</span> in
+            private docs; block outbound requests that contain it.
+          </div>
+        </div>
+        <button
+          type="button"
+          className={`inkwell-toggle ${privacyCanary ? 'on' : ''}`}
+          onClick={() => setPrivacyCanary(!privacyCanary)}
+          role="switch"
+          aria-checked={privacyCanary}
+          aria-label="Privacy canary"
+        />
+      </div>
     </>
   );
 }
@@ -703,6 +870,18 @@ function AISection() {
 // ── Voice ────────────────────────────────────────────────────────────────
 
 function VoiceSection() {
+  const voiceLanguage = useSettingsStore((s) => s.voiceLanguage);
+  const setVoiceLanguage = useSettingsStore((s) => s.setVoiceLanguage);
+  const voiceCleanup = useSettingsStore((s) => s.voiceCleanup);
+  const setVoiceCleanup = useSettingsStore((s) => s.setVoiceCleanup);
+  const voiceOfflineFallback = useSettingsStore((s) => s.voiceOfflineFallback);
+  const setVoiceOfflineFallback = useSettingsStore((s) => s.setVoiceOfflineFallback);
+
+  const languages: { value: VoiceLanguage; label: string }[] = [
+    { value: 'en-US', label: 'English (US)' },
+    { value: 'auto', label: 'Auto-detect' },
+  ];
+
   return (
     <>
       <h4>Voice</h4>
@@ -713,12 +892,16 @@ function VoiceSection() {
       <div className="inkwell-setting-row">
         <div className="inkwell-setting-label">Language</div>
         <div className="inkwell-segmented">
-          <button type="button" className="inkwell-segmented-option on">
-            English (US)
-          </button>
-          <button type="button" className="inkwell-segmented-option">
-            Auto-detect
-          </button>
+          {languages.map((l) => (
+            <button
+              key={l.value}
+              type="button"
+              className={`inkwell-segmented-option ${voiceLanguage === l.value ? 'on' : ''}`}
+              onClick={() => setVoiceLanguage(l.value)}
+            >
+              {l.label}
+            </button>
+          ))}
         </div>
       </div>
       <div className="inkwell-setting-row">
@@ -728,7 +911,30 @@ function VoiceSection() {
             Refine raw Whisper transcripts before inserting.
           </div>
         </div>
-        <button type="button" className="inkwell-toggle on" role="switch" aria-checked />
+        <button
+          type="button"
+          className={`inkwell-toggle ${voiceCleanup ? 'on' : ''}`}
+          onClick={() => setVoiceCleanup(!voiceCleanup)}
+          role="switch"
+          aria-checked={voiceCleanup}
+          aria-label="Clean up with Claude"
+        />
+      </div>
+      <div className="inkwell-setting-row">
+        <div>
+          <div className="inkwell-setting-label">Offline fallback</div>
+          <div className="inkwell-setting-desc">
+            Insert raw transcript if cloud cleanup is unavailable.
+          </div>
+        </div>
+        <button
+          type="button"
+          className={`inkwell-toggle ${voiceOfflineFallback ? 'on' : ''}`}
+          onClick={() => setVoiceOfflineFallback(!voiceOfflineFallback)}
+          role="switch"
+          aria-checked={voiceOfflineFallback}
+          aria-label="Offline fallback"
+        />
       </div>
     </>
   );
