@@ -13,7 +13,7 @@ test.describe('Settings Flows', () => {
     await page.getByRole('tab', { name: 'AI' }).click();
 
     await expect(page.getByLabel('Claude API key')).toBeVisible();
-    await expect(page.getByText('Auth method')).toBeVisible();
+    await expect(page.getByText('AI Provider')).toBeVisible();
     await expect(page.getByText('Ghost text suggestions')).toBeVisible();
 
     expect(pageErrors).toEqual([]);
