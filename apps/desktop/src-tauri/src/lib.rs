@@ -5,6 +5,7 @@
 
 pub mod inference;
 pub mod bridge;
+pub mod storage;
 #[cfg(test)]
 mod tests;
 
@@ -219,6 +220,10 @@ mod app {
                 commands::auth_refresh_claude_token,
                 commands::auth_sign_out_claude,
                 commands::auth_invoke_claude_messages,
+                storage::documents_list,
+                storage::document_get,
+                storage::document_put,
+                storage::document_delete,
             ])
             .setup(|app| {
                 // Deep-link handler: inkwell://open?path=...

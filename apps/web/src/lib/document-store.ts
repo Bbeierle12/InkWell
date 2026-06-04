@@ -9,12 +9,16 @@
 import { create } from 'zustand';
 import type { Editor } from '@tiptap/core';
 import { countWordsFromContent } from './document-utils';
+import { isTauriRuntime, invokeTauri } from './tauri-bridge';
 
 // ── IndexedDB Constants ──
 
 const DB_NAME = 'inkwell-documents';
 const DB_VERSION = 2;
 const STORE_NAME = 'documents';
+
+// localStorage flag marking the one-time IndexedDB → Rust-backend migration done.
+const MIGRATION_FLAG = 'inkwell-idb-migrated';
 
 // ── Types ──
 
@@ -116,7 +120,7 @@ function ensureV2Fields(doc: Record<string, unknown>): StoredDocument {
   };
 }
 
-async function putDocument(doc: StoredDocument): Promise<void> {
+async function idbPutDocument(doc: StoredDocument): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -132,7 +136,7 @@ async function putDocument(doc: StoredDocument): Promise<void> {
   });
 }
 
-async function getDocument(id: string): Promise<StoredDocument | undefined> {
+async function idbGetDocument(id: string): Promise<StoredDocument | undefined> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
@@ -149,7 +153,7 @@ async function getDocument(id: string): Promise<StoredDocument | undefined> {
   });
 }
 
-async function getAllDocuments(): Promise<StoredDocument[]> {
+async function idbGetAllDocuments(): Promise<StoredDocument[]> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
@@ -169,7 +173,7 @@ async function getAllDocuments(): Promise<StoredDocument[]> {
   });
 }
 
-async function removeDocument(id: string): Promise<void> {
+async function idbRemoveDocument(id: string): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -183,6 +187,77 @@ async function removeDocument(id: string): Promise<void> {
       reject(tx.error);
     };
   });
+}
+
+// ── Backend dispatch ──
+//
+// Desktop (Tauri) persists through the Rust SQLite backend, so storage is
+// independent of the webview engine (a WebKit version skew can no longer hide
+// documents). Web builds keep using IndexedDB. The idb* functions above stay
+// available for the one-time migration.
+
+const backendPut = (doc: StoredDocument): Promise<void> =>
+  invokeTauri<void>('document_put', { doc });
+const backendGet = (id: string): Promise<StoredDocument | null> =>
+  invokeTauri<StoredDocument | null>('document_get', { id });
+const backendList = (): Promise<StoredDocument[]> =>
+  invokeTauri<StoredDocument[]>('documents_list');
+const backendRemove = (id: string): Promise<void> =>
+  invokeTauri<void>('document_delete', { id });
+
+async function putDocument(doc: StoredDocument): Promise<void> {
+  return isTauriRuntime() ? backendPut(doc) : idbPutDocument(doc);
+}
+
+async function getDocument(id: string): Promise<StoredDocument | undefined> {
+  if (isTauriRuntime()) return (await backendGet(id)) ?? undefined;
+  return idbGetDocument(id);
+}
+
+async function getAllDocuments(): Promise<StoredDocument[]> {
+  return isTauriRuntime() ? backendList() : idbGetAllDocuments();
+}
+
+async function removeDocument(id: string): Promise<void> {
+  return isTauriRuntime() ? backendRemove(id) : idbRemoveDocument(id);
+}
+
+let migrationChecked = false;
+
+/**
+ * One-time migration: copy documents from the legacy IndexedDB store into the
+ * Rust SQLite backend. Runs once on the first Tauri launch after upgrading, only
+ * when the backend is still empty. Idempotent and non-fatal — a failure leaves
+ * the app working (backend stays the source of truth) and retries next launch.
+ */
+async function migrateToBackendIfNeeded(): Promise<void> {
+  if (!isTauriRuntime() || migrationChecked) return;
+
+  const flagged =
+    typeof localStorage !== 'undefined' && localStorage.getItem(MIGRATION_FLAG) === '1';
+  if (flagged) {
+    migrationChecked = true;
+    return;
+  }
+
+  try {
+    // Only seed an empty backend; never overwrite documents already migrated.
+    const existing = await backendList();
+    if (existing.length === 0) {
+      const legacy = await idbGetAllDocuments();
+      for (const doc of legacy) {
+        await backendPut(doc); // preserves deletedAt, so trashed docs stay trashed
+      }
+      if (legacy.length > 0) {
+        console.info(`Inkwell: migrated ${legacy.length} document(s) from IndexedDB to the backend`);
+      }
+    }
+    if (typeof localStorage !== 'undefined') localStorage.setItem(MIGRATION_FLAG, '1');
+    migrationChecked = true;
+  } catch (err) {
+    // Leave unflagged so a later launch can retry once IndexedDB is readable.
+    console.error('Inkwell: IndexedDB → backend migration failed', err);
+  }
 }
 
 function generateId(): string {
@@ -287,6 +362,7 @@ export const useDocumentStore = create<DocumentStoreState>((set, get) => ({
   },
 
   refreshDocuments: async () => {
+    await migrateToBackendIfNeeded();
     const documents = await getAllDocuments();
     set({ documents });
   },

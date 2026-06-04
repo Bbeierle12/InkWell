@@ -20,6 +20,54 @@ export function isTauriEnvironment(): boolean {
   return typeof window !== 'undefined' && '__TAURI__' in window;
 }
 
+/**
+ * Detect a Tauri v2 runtime.
+ *
+ * NOTE: `isTauriEnvironment()` above checks `window.__TAURI__`, which Tauri v2
+ * only injects when `withGlobalTauri` is enabled (it is not, here). The runtime
+ * always injects `window.__TAURI_INTERNALS__`, so that is the reliable signal.
+ * Used by the document store's backend dispatch; the legacy helpers keep their
+ * original `isTauriEnvironment()` gating to avoid changing their behavior.
+ */
+export function isTauriRuntime(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
+  );
+}
+
+async function getRuntimeInvoke(): Promise<TauriInvoke | null> {
+  if (!isTauriRuntime()) return null;
+  if (cachedInvoke) return cachedInvoke;
+  try {
+    const tauri = await import('@tauri-apps/api/core');
+    cachedInvoke = tauri.invoke as TauriInvoke;
+    return cachedInvoke;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Low-level invoke for callers that build their own typed wrappers.
+ *
+ * Unlike the helpers below (which swallow errors and return null), this
+ * propagates failures — used by the document store so a failed save/load
+ * surfaces rather than silently losing data.
+ *
+ * @throws if not running in a Tauri runtime or if the command errors.
+ */
+export async function invokeTauri<T>(
+  cmd: string,
+  args?: Record<string, unknown>,
+): Promise<T> {
+  const invoke = await getRuntimeInvoke();
+  if (!invoke) {
+    throw new Error(`Tauri command "${cmd}" called outside a Tauri runtime`);
+  }
+  return (await invoke(cmd, args)) as T;
+}
+
 async function getTauriInvoke(): Promise<TauriInvoke | null> {
   if (!isTauriEnvironment()) return null;
   if (cachedInvoke) return cachedInvoke;
