@@ -12,6 +12,7 @@ import {
   DiffPreviewPluginKey,
   AIUndo,
   SlashCommands,
+  GrammarCheck,
 } from '@inkwell/editor';
 import type { SlashCommandItem } from '@inkwell/editor';
 
@@ -26,6 +27,7 @@ import { SettingsModal } from '@/components/SettingsModal';
 import { useDocumentAI } from '@/hooks/useDocumentAI';
 import { useChatAI } from '@/hooks/useChatAI';
 import { useGhostText } from '@/hooks/useGhostText';
+import { useGrammar } from '@/hooks/useGrammar';
 import { useVoicePipeline } from '@/hooks/useVoicePipeline';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useFileOpen } from '@/hooks/useFileOpen';
@@ -109,6 +111,9 @@ export default function Home() {
     setShowSetup(false);
   }, []);
 
+  const { check: checkGrammar, spelling: grammarSpellingEnabled, grammar: grammarGrammarEnabled } =
+    useGrammar();
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -128,6 +133,12 @@ export default function Home() {
             executeRef.current(operation, args);
           }
         },
+      }),
+      GrammarCheck.configure({
+        check: checkGrammar,
+        debounceMs: 500,
+        spelling: grammarSpellingEnabled,
+        grammar: grammarGrammarEnabled,
       }),
     ],
     content: '',
