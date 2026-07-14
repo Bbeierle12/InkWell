@@ -35,7 +35,13 @@ export function applyFix(
   issue: AnchoredIssue,
   replacement: string,
 ): Transaction | null {
-  if (issue.from < 0 || issue.to > state.doc.content.size || issue.from >= issue.to) {
+  if (
+    issue.from < 0 ||
+    issue.to > state.doc.content.size ||
+    issue.from >= issue.to ||
+    !Number.isInteger(issue.from) ||
+    !Number.isInteger(issue.to)
+  ) {
     return null;
   }
   if (state.doc.textBetween(issue.from, issue.to, undefined, LEAF_PLACEHOLDER) !== issue.originalText) {

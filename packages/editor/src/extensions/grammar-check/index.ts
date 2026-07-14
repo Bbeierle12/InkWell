@@ -51,7 +51,11 @@ interface SetEnabledMeta {
   enabled: EnabledKinds;
 }
 
-export type GrammarMeta = ScanResultMeta | SetEnabledMeta;
+interface ClearCacheMeta {
+  type: 'clearCache';
+}
+
+export type GrammarMeta = ScanResultMeta | SetEnabledMeta | ClearCacheMeta;
 
 /** Transaction meta: a scan for `blockText` came back with `issues`. */
 export function applyScanResult(blockText: string, issues: GrammarIssue[]): GrammarMeta {
@@ -61,6 +65,20 @@ export function applyScanResult(blockText: string, issues: GrammarIssue[]): Gram
 /** Transaction meta: toggle which categories are shown. */
 export function setGrammarEnabled(spelling: boolean, grammar: boolean): GrammarMeta {
   return { type: 'setEnabled', enabled: { spelling, grammar } };
+}
+
+/**
+ * Transaction meta: empty the content-addressed cache.
+ *
+ * Dispatch after the user adds a word to the dictionary or ignores an issue.
+ * Those actions change what the ENGINE would say about a block's text, but the
+ * cache is keyed by that text, which did not change — so the stale cache entry
+ * would otherwise keep producing the exact issue the user just dismissed on
+ * every future anchoring pass. Clearing the cache forces a fresh rescan (via
+ * the existing debounce), and the fresh scan reflects the new engine state.
+ */
+export function clearGrammarCache(): GrammarMeta {
+  return { type: 'clearCache' };
 }
 
 export interface GrammarCheckOptions {
@@ -108,6 +126,8 @@ export function createGrammarCheckPlugin(options: GrammarCheckOptions): Plugin<G
           cache = cacheSet(cache, meta.blockText, meta.issues);
         } else if (meta?.type === 'setEnabled') {
           enabled = meta.enabled;
+        } else if (meta?.type === 'clearCache') {
+          cache = new Map();
         } else if (!tr.docChanged) {
           // Nothing that anchoring depends on has moved: not the doc, not the
           // cache, not the enabled set. Keeping the previous state object (and

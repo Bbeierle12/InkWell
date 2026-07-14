@@ -95,6 +95,29 @@ describe('applyFix', () => {
     expect(applyFix(state, inverted, 'sentence')).toBeNull();
   });
 
+  it('REFUSES when from === to and originalText is empty (proves the from>=to guard rejects it, not the textBetween check)', () => {
+    // An empty originalText at a zero-length range would spuriously PASS
+    // textBetween(from, from, ...) === '' if the from>=to guard did not run
+    // first. This isolates that the bounds guard — not the content check — is
+    // what is actually rejecting the boundary case.
+    const text = 'This sentance is bad.';
+    const state = stateWith(text);
+    const base = issueOn(text, 'sentance', 'sentence');
+    const zeroLengthEmpty: AnchoredIssue = { ...base, to: base.from, originalText: '' };
+
+    expect(applyFix(state, zeroLengthEmpty, 'sentence')).toBeNull();
+  });
+
+  it('REFUSES when from/to are non-finite or non-integer (NaN)', () => {
+    const text = 'This sentance is bad.';
+    const state = stateWith(text);
+    const base = issueOn(text, 'sentance', 'sentence');
+
+    expect(applyFix(state, { ...base, from: NaN }, 'sentence')).toBeNull();
+    expect(applyFix(state, { ...base, to: NaN }, 'sentence')).toBeNull();
+    expect(applyFix(state, { ...base, from: 1.5 }, 'sentence')).toBeNull();
+  });
+
   it('REFUSES when the range would span a hard_break (leaf-aware verify)', () => {
     // Plain-text originalText, but the range straddles a hard_break in the doc.
     // A leaf-BLIND readback would render the break as '' and spuriously match;

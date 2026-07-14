@@ -35,6 +35,7 @@ import {
   grammarCheckKey,
   applyScanResult,
   setGrammarEnabled,
+  clearGrammarCache,
 } from '../index';
 
 function docOf(...paragraphs: string[]): PMNode {
@@ -882,6 +883,58 @@ describe('grammar-check plugin state', () => {
     state = state.apply(state.tr.setMeta('someOtherPlugin', true));
 
     expect(grammarCheckKey.getState(state)).toBe(before);
+  });
+
+  it('clearGrammarCache() produces a clearCache meta', () => {
+    expect(clearGrammarCache()).toEqual({ type: 'clearCache' });
+  });
+
+  it('dispatching clearGrammarCache empties the cache and drops all anchored issues', () => {
+    // Simulates "Ignore" / "Add to dictionary": the engine's answer changed but
+    // the cache is still keyed by the unchanged block text. clearCache must wipe
+    // the cache so the dismissed issue does not reappear from a stale entry.
+    const plugin = createGrammarCheckPlugin({
+      check: async () => [],
+      debounceMs: 10,
+      spelling: true,
+      grammar: true,
+    });
+    let state = stateWith(plugin, TEXT);
+    state = state.apply(
+      state.tr.setMeta(grammarCheckKey, applyScanResult(TEXT, [sentanceIssue(TEXT)])),
+    );
+    expect(grammarCheckKey.getState(state)!.issues).toHaveLength(1);
+    expect(grammarCheckKey.getState(state)!.cache.size).toBe(1);
+
+    state = state.apply(state.tr.setMeta(grammarCheckKey, clearGrammarCache()));
+
+    const ps = grammarCheckKey.getState(state)!;
+    expect(ps.issues).toEqual([]);
+    expect(ps.cache.size).toBe(0);
+  });
+
+  it('a docChanged transaction after clearGrammarCache still works: no crash, re-anchors from an empty cache', () => {
+    const plugin = createGrammarCheckPlugin({
+      check: async () => [],
+      debounceMs: 10,
+      spelling: true,
+      grammar: true,
+    });
+    let state = stateWith(plugin, TEXT);
+    state = state.apply(
+      state.tr.setMeta(grammarCheckKey, applyScanResult(TEXT, [sentanceIssue(TEXT)])),
+    );
+    state = state.apply(state.tr.setMeta(grammarCheckKey, clearGrammarCache()));
+
+    // A doc change after clearing must not throw, and re-anchors against the
+    // now-empty cache, so it still produces zero issues.
+    expect(() => {
+      state = state.apply(state.tr.insertText('!', 1));
+    }).not.toThrow();
+
+    const ps = grammarCheckKey.getState(state)!;
+    expect(ps.issues).toEqual([]);
+    expect(ps.cache.size).toBe(0);
   });
 });
 

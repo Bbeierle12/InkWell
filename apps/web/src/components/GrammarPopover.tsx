@@ -12,7 +12,7 @@
 
 import { useEffect, useState } from 'react';
 import type { Editor } from '@tiptap/core';
-import { grammarCheckKey, type AnchoredIssue } from '@inkwell/editor';
+import { grammarCheckKey, clearGrammarCache, type AnchoredIssue } from '@inkwell/editor';
 import { useSettingsStore } from '@/lib/settings-store';
 import { getGrammarEngine } from '@/lib/grammar-instance';
 import { applyFix } from '@/lib/grammar-fix';
@@ -65,7 +65,12 @@ export function GrammarPopover({ editor }: { editor: Editor | null }) {
     const engine = getGrammarEngine();
     await engine.ignoreIssue(issue.originalText, issue.id);
     setGrammarIgnoredLints(await engine.exportIgnored());
-    // TODO(Task 9): dispatch clearGrammarCache() so the dismissed issue doesn't reappear from cache
+    // The engine's answer for this text just changed, but the plugin's cache is
+    // still keyed by the (unchanged) block text — clear it so the next scan
+    // reflects the ignore and the dismissed squiggle does not reappear.
+    if (editor) {
+      editor.view.dispatch(editor.state.tr.setMeta(grammarCheckKey, clearGrammarCache()));
+    }
     close();
   };
 
@@ -73,7 +78,10 @@ export function GrammarPopover({ editor }: { editor: Editor | null }) {
     const engine = getGrammarEngine();
     await engine.addWord(issue.originalText);
     addGrammarWord(issue.originalText);
-    // TODO(Task 9): dispatch clearGrammarCache() so the dismissed issue doesn't reappear from cache
+    // Same reasoning as onIgnore: invalidate the stale content-addressed cache.
+    if (editor) {
+      editor.view.dispatch(editor.state.tr.setMeta(grammarCheckKey, clearGrammarCache()));
+    }
     close();
   };
 
