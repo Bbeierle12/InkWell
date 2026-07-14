@@ -25,11 +25,24 @@ const widgetSchema = new Schema({
   },
 });
 
+/**
+ * One inline part: plain text, a hard_break, or BOLD text. `{ bold }` exists
+ * so the property test below can occasionally produce two adjacent text-node
+ * SIBLINGS instead of one merged node — ProseMirror only merges adjacent text
+ * nodes that carry identical marks, so a plain/bold or bold/plain transition
+ * is the only way to get a genuine text/text position boundary.
+ */
+type Part = string | 'BR' | { bold: string };
+
 /** Build a doc with one paragraph from an alternating text / hardBreak spec. */
-function buildDoc(parts: Array<string | 'BR'>): PMNode {
+function buildDoc(parts: Part[]): PMNode {
   const content = parts
-    .filter((p) => p !== '')
-    .map((p) => (p === 'BR' ? schema.node('hard_break') : schema.text(p as string)));
+    .filter((p) => p !== '' && !(typeof p === 'object' && p.bold === ''))
+    .map((p) => {
+      if (p === 'BR') return schema.node('hard_break');
+      if (typeof p === 'object') return schema.text(p.bold, [schema.marks.strong.create()]);
+      return schema.text(p);
+    });
   const para = schema.node('paragraph', null, content);
   return schema.node('doc', null, [para]);
 }
@@ -38,13 +51,13 @@ describe('textOffsetToPos', () => {
   it('maps offset 0 to the first content position', () => {
     const doc = buildDoc(['hello']);
     const block = doc.child(0);
-    expect(textOffsetToPos(block, 0, 0)).toBe(1);
+    expect(textOffsetToPos(block, 0, 0, 'start')).toBe(1);
   });
 
   it('maps an offset in plain text', () => {
     const doc = buildDoc(['hello world']);
     const block = doc.child(0);
-    const pos = textOffsetToPos(block, 0, 6)!;
+    const pos = textOffsetToPos(block, 0, 6, 'start')!;
     expect(doc.textBetween(pos, pos + 5)).toBe('world');
   });
 
@@ -59,7 +72,7 @@ describe('textOffsetToPos', () => {
     // 2..3), 4='b' ends. So offset 1 -> pos 3. (blockPos + 1 + offset = 0+1+1 = 2
     // is the naive/wrong answer, since it doesn't account for the hard_break's
     // own position slot.)
-    const pos = textOffsetToPos(block, 0, 1)!;
+    const pos = textOffsetToPos(block, 0, 1, 'start')!;
     expect(doc.textBetween(pos, pos + 1)).toBe('b');
   });
 
@@ -150,13 +163,13 @@ describe('textOffsetToPos', () => {
   it('returns null for an out-of-range offset', () => {
     const doc = buildDoc(['hi']);
     const block = doc.child(0);
-    expect(textOffsetToPos(block, 0, 99)).toBeNull();
+    expect(textOffsetToPos(block, 0, 99, 'start')).toBeNull();
   });
 
   it('returns null for a negative offset', () => {
     const doc = buildDoc(['hi']);
     const block = doc.child(0);
-    expect(textOffsetToPos(block, 0, -1)).toBeNull();
+    expect(textOffsetToPos(block, 0, -1, 'start')).toBeNull();
   });
 
   it('returns null when the offset lands inside a non-text node that carries its own text content', () => {
@@ -175,7 +188,7 @@ describe('textOffsetToPos', () => {
     const block = doc.child(0);
     expect(block.textContent).toBe('axb');
 
-    expect(textOffsetToPos(block, 0, 1)).toBeNull(); // 'x'
+    expect(textOffsetToPos(block, 0, 1, 'start')).toBeNull(); // 'x'
   });
 
   it('walks past a text-bearing non-text node to correctly address text after it', () => {
@@ -188,9 +201,54 @@ describe('textOffsetToPos', () => {
     ]);
     const block = doc.child(0);
 
-    const pos = textOffsetToPos(block, 0, 2)!; // 'b', after the widget
+    const pos = textOffsetToPos(block, 0, 2, 'start')!; // 'b', after the widget
     expect(pos).not.toBeNull();
     expect(doc.textBetween(pos, pos + 1)).toBe('b');
+  });
+
+  describe('TEXT/TEXT boundary (adjacent text nodes carrying different marks)', () => {
+    // ProseMirror MERGES adjacent text nodes that share identical marks at
+    // construction time, so the only way two text nodes can end up as
+    // adjacent siblings — rather than one merged node — is for them to carry
+    // DIFFERENT marks. This is a boundary the hard_break-based property test
+    // below can never reach: its generator only ever produces text/leaf
+    // boundaries. It happens to be handled correctly today because adjacent
+    // text nodes share a position, so the eager 'end' return (added for the
+    // leaf case) yields the same integer the deferred fallback would — but
+    // that coincidence is exactly the kind of thing a future refactor of the
+    // early return could break for every bold/italic run in a real document.
+    function boldThenPlainDoc(): { doc: PMNode; block: PMNode } {
+      const para = schema.node('paragraph', null, [
+        schema.text('ab', [schema.marks.strong.create()]),
+        schema.text('cd'),
+      ]);
+      const doc = schema.node('doc', null, [para]);
+      return { doc, block: doc.child(0) };
+    }
+
+    it("<p><b>ab</b>cd</p> offset 2, 'end' -> 3 (right at the mark boundary)", () => {
+      const { block } = boldThenPlainDoc();
+      expect(block.textContent).toBe('abcd');
+
+      expect(textOffsetToPos(block, 0, 2, 'end')).toBe(3);
+    });
+
+    it("<p><b>ab</b>cd</p> offset 4, 'end' -> 5 (end of block)", () => {
+      const { block } = boldThenPlainDoc();
+
+      expect(textOffsetToPos(block, 0, 4, 'end')).toBe(5);
+    });
+
+    it("anchors a span crossing the mark boundary: 'bc' -> [2, 4), reading back 'bc'", () => {
+      const { doc, block } = boldThenPlainDoc();
+
+      const from = textOffsetToPos(block, 0, 1, 'start')!;
+      const to = textOffsetToPos(block, 0, 3, 'end')!;
+
+      expect(from).toBe(2);
+      expect(to).toBe(4);
+      expect(doc.textBetween(from, to)).toBe('bc');
+    });
   });
 
   it('property: slicing textContent by [offset, offset+len) always equals the LEAF-AWARE textBetween of the mapped positions, and the mapped range never STARTS OR ENDS on a leaf', () => {
@@ -205,12 +263,19 @@ describe('textOffsetToPos', () => {
     // necessity. What it must NEVER do is START or END on one: that would mean
     // the range includes only part of the break's "slot," which is exactly the
     // overshoot/undershoot shape the trailing-leaf bug produced.
+    //
+    // The generator also occasionally emits BOLD text (see `Part`/`buildDoc`),
+    // so a run of the property can land on a plain/bold or bold/plain
+    // transition — a genuine TEXT/TEXT position boundary, not just the
+    // text/leaf boundaries a hard_break-only generator can ever reach.
+    const plainPart = fc.string({ minLength: 1, maxLength: 8 }).filter((s) => !/[\n\r]/.test(s));
     fc.assert(
       fc.property(
         fc.array(
           fc.oneof(
-            fc.string({ minLength: 1, maxLength: 8 }).filter((s) => !/[\n\r]/.test(s)),
+            plainPart,
             fc.constant('BR' as const),
+            plainPart.map((s) => ({ bold: s })),
           ),
           { minLength: 1, maxLength: 6 },
         ),
@@ -263,9 +328,9 @@ describe('textOffsetToPos', () => {
       const block = doc.child(0);
       expect(block.textContent).toBe('ab');
 
-      const from = textOffsetToPos(block, 0, 0)!;
+      const from = textOffsetToPos(block, 0, 0, 'start')!;
       expect(from).toBe(2);
-      const to = textOffsetToPos(block, 0, 2)!;
+      const to = textOffsetToPos(block, 0, 2, 'end')!;
       expect(doc.textBetween(from, to, undefined, '￼')).toBe('ab');
     });
 
@@ -278,7 +343,7 @@ describe('textOffsetToPos', () => {
       const block = doc.child(0);
       expect(block.textContent).toBe('');
 
-      expect(textOffsetToPos(block, 0, 0)).toBe(1);
+      expect(textOffsetToPos(block, 0, 0, 'start')).toBe(1);
     });
 
     it('<p></p> offset 0 -> position 1 (empty block, no children at all)', () => {
@@ -288,7 +353,7 @@ describe('textOffsetToPos', () => {
       const block = doc.child(0);
       expect(block.textContent).toBe('');
 
-      expect(textOffsetToPos(block, 0, 0)).toBe(1);
+      expect(textOffsetToPos(block, 0, 0, 'start')).toBe(1);
     });
   });
 });

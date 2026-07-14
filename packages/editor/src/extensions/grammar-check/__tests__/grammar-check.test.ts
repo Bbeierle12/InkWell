@@ -365,6 +365,69 @@ describe('anchorIssues', () => {
     expect(anchorIssues(doc, cache, BOTH)).toEqual([]);
   });
 
+  it('REGRESSION: drops a zero-length issue whose offset sits at a LEADING leaf boundary, rather than anchoring an inverted range', () => {
+    // <p><br>ab</p>, textContent 'ab'. offset 0, length 0. 'start' skips
+    // FORWARD past the leading <br> to position 2 (the start of 'a'); 'end'
+    // resolves eagerly at the same offset WITHOUT walking past the break
+    // (that is the whole point of the direction-aware end fix), landing at
+    // position 1. So from=2, to=1: an INVERTED range. `doc.textBetween(2, 1,
+    // ...)` returns '', which equals a zero-length issue's originalText
+    // ('') — the "map, then verify" guard alone would wave this through were
+    // it not for the explicit `to <= from` check added ahead of it.
+    const para = schema.node('paragraph', null, [schema.node('hard_break'), schema.text('ab')]);
+    const doc = schema.node('doc', null, [para]);
+    const text = para.textContent; // 'ab'
+    const issue: GrammarIssue = {
+      id: 'zero-len-leading-br',
+      kind: 'spelling',
+      ruleKind: 'Spelling',
+      offset: 0,
+      length: 0,
+      originalText: '',
+      message: '',
+      suggestions: [],
+    };
+
+    expect(anchorIssues(doc, new Map([[text, [issue]]]), BOTH)).toEqual([]);
+  });
+
+  it('REGRESSION: drops a zero-length issue at an INTERIOR leaf boundary too', () => {
+    // <p>a<br>b</p>, textContent 'ab'. offset 1, length 0 — the same
+    // inverted-range shape as above, just mid-document instead of at the
+    // block's start.
+    const para = schema.node('paragraph', null, [
+      schema.text('a'),
+      schema.node('hard_break'),
+      schema.text('b'),
+    ]);
+    const doc = schema.node('doc', null, [para]);
+    const text = para.textContent; // 'ab'
+    const issue: GrammarIssue = {
+      id: 'zero-len-interior-br',
+      kind: 'spelling',
+      ruleKind: 'Spelling',
+      offset: 1,
+      length: 0,
+      originalText: '',
+      message: '',
+      suggestions: [],
+    };
+
+    expect(anchorIssues(doc, new Map([[text, [issue]]]), BOTH)).toEqual([]);
+  });
+
+  it('drops an issue with a negative length (an inverted range by construction), even away from any leaf', () => {
+    // engine.ts computes `length = span.end - span.start` with no clamp, so a
+    // negative length is not just a leaf-boundary phenomenon — this pins the
+    // guard's general "also covers a negative length" clause.
+    const text = 'This sentance is bad.';
+    const doc = docOf(text);
+    const bad: GrammarIssue = { ...sentanceIssue(text), length: -1 };
+    const cache = new Map([[text, [bad]]]);
+
+    expect(anchorIssues(doc, cache, BOTH)).toEqual([]);
+  });
+
   it('NEVER mis-anchors, and ALWAYS anchors when an anchor is guaranteed', () => {
     // The load-bearing guarantee, as a TWO-SIDED property.
     //

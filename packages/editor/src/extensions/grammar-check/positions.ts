@@ -39,8 +39,11 @@ import type { Node as PMNode } from '@tiptap/pm/model';
  *                  must stop immediately, right after the last character
  *                  actually included — walking forward would silently widen
  *                  the range to swallow that leaf, exactly the shape of a
- *                  corrupting replace. Defaults to 'start' for source
- *                  compatibility with callers computing only a single point.
+ *                  corrupting replace. REQUIRED, not defaulted: a caller
+ *                  computing a `to` who forgets this argument must fail to
+ *                  compile, not silently get 'start' — that is exactly the
+ *                  document-corrupting behaviour this parameter exists to
+ *                  eliminate.
  * @returns The absolute document position, or `null` if `offset` is out of
  *          range or lands inside a non-text inline node's interior (there is
  *          no single ProseMirror position that addresses "partway through" a
@@ -56,7 +59,7 @@ export function textOffsetToPos(
   block: PMNode,
   blockPos: number,
   offset: number,
-  direction: 'start' | 'end' = 'start',
+  direction: 'start' | 'end',
 ): number | null {
   if (offset < 0) return null;
 

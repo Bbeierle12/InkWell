@@ -141,6 +141,18 @@ export function anchorIssues(
         const to = textOffsetToPos(block, pos, issue.offset + issue.length, 'end');
         if (from === null || to === null) continue;
 
+        // A zero-length (or, if `length` were ever negative, an inverted)
+        // issue can map `from` and `to` on either side of an intervening
+        // leaf: 'start' skips FORWARD past the leaf while 'end' stops BEFORE
+        // it, so the two cross and produce `to <= from`. `doc.textBetween`
+        // on an inverted range still returns a well-defined string ('' when
+        // to<from) that can spuriously equal a zero-length `originalText`,
+        // so the verify below cannot be relied on to catch this — it must be
+        // rejected here, before verify, in the same drop-don't-corrupt idiom
+        // as the rest of this function. For any length >= 1, from < to
+        // strictly, so this can never drop a legitimate issue.
+        if (to <= from) continue;
+
         // Verify. Non-negotiable. LEAF-AWARE: see LEAF_PLACEHOLDER. A range that
         // spans an inline leaf can never silently match, so a break-spanning
         // issue is dropped rather than rendered over a line break.
