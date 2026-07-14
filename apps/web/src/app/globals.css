@@ -25,6 +25,8 @@
   --diff-ins: #3a7a4a;
   --diff-ins-bg: #e6f1e3;
   --rec: #c0392b;
+  --grammar-spelling: #dc2626;
+  --grammar-grammar: #2563eb;
 
   --foreground: var(--ink);
   --background: var(--paper);
@@ -114,6 +116,22 @@ body {
   background: var(--diff-ins-bg);
   padding: 1px 2px;
   border-radius: 2px;
+}
+
+.inkwell-grammar {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.inkwell-grammar-spelling {
+  text-decoration-color: var(--grammar-spelling);
+}
+
+.inkwell-grammar-grammar {
+  text-decoration-color: var(--grammar-grammar);
 }
 
 .inkwell-diff-toolbar {

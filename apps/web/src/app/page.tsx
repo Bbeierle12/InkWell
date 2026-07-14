@@ -67,6 +67,7 @@ export default function Home() {
     editorFontSize,
     editorWidth,
     spellCheck,
+    grammarSpelling,
     ghostTextEnabled,
   } = useSettingsStore();
 
@@ -136,7 +137,9 @@ export default function Home() {
         role: 'textbox',
         'aria-label': 'Document editor',
         'aria-multiline': 'true',
-        spellcheck: spellCheck ? 'true' : 'false',
+        // Native browser spellcheck must yield to the local grammar engine, or the
+        // user sees TWO wavy underlines under the same misspelling.
+        spellcheck: spellCheck && !grammarSpelling ? 'true' : 'false',
       },
     },
   });
@@ -175,11 +178,13 @@ export default function Home() {
           role: 'textbox',
           'aria-label': 'Document editor',
           'aria-multiline': 'true',
-          spellcheck: spellCheck ? 'true' : 'false',
+          // Native browser spellcheck must yield to the local grammar engine, or the
+          // user sees TWO wavy underlines under the same misspelling.
+          spellcheck: spellCheck && !grammarSpelling ? 'true' : 'false',
         },
       },
     });
-  }, [editor, spellCheck]);
+  }, [editor, spellCheck, grammarSpelling]);
 
   const handleSlashCommand = useCallback(
     (operation: OperationType, args?: string) => {
