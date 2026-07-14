@@ -14,6 +14,7 @@ import { EditorContent } from '@tiptap/react';
 import { useDocumentStore } from '@/lib/document-store';
 import { useSettingsStore } from '@/lib/settings-store';
 import { formatRelativeTime } from '@/lib/document-utils';
+import { GrammarPopover } from '@/components/GrammarPopover';
 
 interface EditorAreaProps {
   editor: Editor | null;
@@ -96,6 +97,7 @@ export function EditorArea({
 
           <div data-testid="inkwell-editor">
             <EditorContent editor={editor} />
+            <GrammarPopover editor={editor} />
           </div>
 
           {editor && hasDiffActive && (
