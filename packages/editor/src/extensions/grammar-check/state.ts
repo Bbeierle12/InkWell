@@ -3,10 +3,12 @@
  *
  * Two rules govern this file, and neither may be weakened:
  *
- *  1. MAP, THEN VERIFY. An issue becomes a decoration only if
- *     `doc.textBetween(from, to) === issue.originalText`. Anything else is
+ *  1. MAP, THEN VERIFY. An issue becomes a decoration only if the live document
+ *     text under [from, to) still equals `issue.originalText`. Anything else is
  *     dropped silently. Mis-anchoring is therefore structurally impossible:
- *     the worst a stale result can do is vanish.
+ *     the worst a stale result can do is vanish. The read-back is LEAF-AWARE
+ *     (see LEAF_PLACEHOLDER) — a range that swallows a hard_break is a
+ *     mis-anchor, not a match, because a replace over it would eat the break.
  *
  *  2. CONTENT-ADDRESSED, NEVER POSITION-ADDRESSED. The cache is keyed by block
  *     text. There is no document version counter and no retained `Mapping` for
@@ -18,6 +20,23 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { GrammarIssue } from '@inkwell/grammar';
 import { textOffsetToPos } from './positions';
+
+/**
+ * Stand-in for an inline leaf node (hard_break, inline image, ...) when reading
+ * a range back out of the document.
+ *
+ * `doc.textBetween(from, to)` with no `leafText` argument renders a leaf as the
+ * EMPTY STRING. That makes the verify below structurally blind: a range that
+ * swallows a hard_break reads back as though the break were not there, matches
+ * `originalText`, and renders a decoration spanning a line break — which a range
+ * replace over [from, to) would then DELETE. Passing U+FFFC (OBJECT REPLACEMENT
+ * CHARACTER, the standard placeholder for an embedded object) makes any leaf
+ * inside the range visible to the comparison, so it can never silently match.
+ *
+ * Block text never contains U+FFFC — it is what `textContent` omits — so this
+ * can only ever cause a mismatch where a leaf is genuinely inside the range.
+ */
+const LEAF_PLACEHOLDER = '￼';
 
 /** A GrammarIssue resolved to live ProseMirror document positions. */
 export interface AnchoredIssue extends GrammarIssue {
@@ -70,9 +89,12 @@ export function cacheSet(cache: IssueCache, text: string, issues: GrammarIssue[]
  * document positions.
  *
  * THE GUARANTEE (spec §5.3): every returned issue satisfies
- *   doc.textBetween(from, to) === originalText
+ *   doc.textBetween(from, to, undefined, LEAF_PLACEHOLDER) === originalText
  * Anything that fails that check is dropped silently. A stale scan result can
  * therefore never render over the wrong text — worst case it simply vanishes.
+ * Because the read-back is leaf-aware, an issue whose range would straddle an
+ * inline leaf (e.g. a word on either side of a hard_break) is dropped too: no
+ * decoration may ever cover a line break.
  *
  * Output is in document order, and for a given (doc, cache, enabled) triple it
  * is deterministic and byte-identical across calls — that is what keeps
@@ -100,8 +122,15 @@ export function anchorIssues(
         const to = textOffsetToPos(block, pos, issue.offset + issue.length);
         if (from === null || to === null) continue;
 
-        // Verify. Non-negotiable.
-        if (doc.textBetween(from, to) !== issue.originalText) continue;
+        // Verify. Non-negotiable. LEAF-AWARE: see LEAF_PLACEHOLDER. A range that
+        // spans an inline leaf can never silently match, so a break-spanning
+        // issue is dropped rather than rendered over a line break.
+        // Verify. Non-negotiable. LEAF-AWARE: see LEAF_PLACEHOLDER. A range that
+        // spans an inline leaf can never silently match, so a break-spanning
+        // issue is dropped rather than rendered over a line break.
+        if (doc.textBetween(from, to, undefined, LEAF_PLACEHOLDER) !== issue.originalText) {
+          continue;
+        }
 
         anchored.push({ ...issue, from, to });
       }

@@ -63,6 +63,61 @@ describe('textOffsetToPos', () => {
     expect(doc.textBetween(pos, pos + 1)).toBe('b');
   });
 
+  it('does not overshoot a TRAILING hard_break when the offset sits at the end of the text', () => {
+    // REGRESSION (document corruption). <p>ab<br></p> — textContent is 'ab'.
+    // Content positions: 'a'=[1,2), 'b'=[2,3), <br>=[3,4).
+    //
+    // The end-of-text fallback used to return `posCursor`, which the loop had
+    // already advanced PAST the trailing hard_break — so offset 2 mapped to 4,
+    // and an issue on the last character produced the range [2,4): 'b' PLUS the
+    // break. A range replace over that range deletes the user's line break.
+    const doc = buildDoc(['ab', 'BR']);
+    const block = doc.child(0);
+    expect(block.textContent).toBe('ab');
+
+    const from = textOffsetToPos(block, 0, 1)!;
+    const to = textOffsetToPos(block, 0, 2)!;
+
+    expect(from).toBe(2);
+    expect(to).toBe(3); // NOT 4 — the break must stay outside the range
+    // Leaf-aware read: a leaf inside the range would render as U+FFFC.
+    expect(doc.textBetween(from, to, undefined, '￼')).toBe('b');
+  });
+
+  it('still resolves the end offset AFTER an interior break when the block ends in text', () => {
+    // The counterpart of the test above: <p>a<br>b</p>, textContent 'ab'. The
+    // trailing-leaf fix must not regress the interior case — offset 2 is the end
+    // of 'b', which lives after the break.
+    const doc = buildDoc(['a', 'BR', 'b']);
+    const block = doc.child(0);
+
+    const from = textOffsetToPos(block, 0, 1)!;
+    const to = textOffsetToPos(block, 0, 2)!;
+
+    expect(from).toBe(3); // after the break
+    expect(to).toBe(4);
+    expect(doc.textBetween(from, to)).toBe('b');
+  });
+
+  it('maps the end offset of a block whose LAST child carries its own text', () => {
+    // A trailing non-text node that DOES contribute characters must still be
+    // walked past by the end-of-text fallback — the fix must skip only trailing
+    // nodes that contribute nothing to textContent.
+    const doc = widgetSchema.node('doc', null, [
+      widgetSchema.node('paragraph', null, [
+        widgetSchema.text('a'),
+        widgetSchema.node('widget', null, [widgetSchema.text('x')]),
+      ]),
+    ]);
+    const block = doc.child(0);
+    expect(block.textContent).toBe('ax');
+
+    const from = textOffsetToPos(block, 0, 0)!;
+    const to = textOffsetToPos(block, 0, 2)!; // end of 'ax'
+
+    expect(doc.textBetween(from, to)).toBe('ax');
+  });
+
   it('returns null for an out-of-range offset', () => {
     const doc = buildDoc(['hi']);
     const block = doc.child(0);

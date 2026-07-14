@@ -48,6 +48,10 @@ export function textOffsetToPos(
   const contentStart = blockPos + 1;
   let textCursor = 0; // chars consumed in block.textContent
   let posCursor = 0; // positions consumed in block content
+  // Position just after the last child that CONTRIBUTED CHARACTERS. Trailing
+  // children that contribute nothing (a hard_break at the end of a paragraph)
+  // advance `posCursor` but must not advance this. See the fallback below.
+  let posAfterText = 0;
 
   for (let i = 0; i < block.childCount; i++) {
     const child = block.child(i);
@@ -65,6 +69,7 @@ export function textOffsetToPos(
       }
       textCursor += len;
       posCursor += len;
+      posAfterText = posCursor;
     } else {
       // Non-text inline node (hard_break, inline atom, ...): it occupies
       // `child.nodeSize` document positions but usually contributes nothing
@@ -78,12 +83,25 @@ export function textOffsetToPos(
       }
       textCursor += childTextLen;
       posCursor += child.nodeSize;
+      // Only a child that actually contributed characters moves the end-of-text
+      // mark forward.
+      if (childTextLen > 0) posAfterText = posCursor;
     }
   }
 
-  // Offset exactly at the end of the block's text (including the case where
-  // the block ends with a non-text node contributing no text).
-  if (offset === textCursor) return contentStart + posCursor;
+  // Offset exactly at the end of the block's text.
+  //
+  // `posCursor` is NOT the answer here. The strict-`<` deferral above walks the
+  // loop to completion for an end-of-text offset, so by now `posCursor` has been
+  // advanced past every TRAILING non-text child. For `<p>ab<br></p>` that would
+  // map offset 2 to the position AFTER the hard_break, and an issue on the last
+  // character would produce a range covering 'b' AND the break — which a range
+  // replace would then delete. `posAfterText` is the position immediately after
+  // the last character-contributing child, which is what "the end of the text"
+  // means. For a block that ends in text the two are identical, so the interior
+  // -break case (`<p>a<br>b</p>`, where offset 1 must resolve AFTER the break)
+  // is unaffected.
+  if (offset === textCursor) return contentStart + posAfterText;
 
   return null;
 }

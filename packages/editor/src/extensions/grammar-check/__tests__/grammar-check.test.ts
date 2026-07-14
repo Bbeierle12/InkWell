@@ -183,6 +183,73 @@ describe('anchorIssues', () => {
     expect(doc.textBetween(anchored[0].from, anchored[0].to)).toBe('sentance');
   });
 
+  it('REGRESSION: an issue on the last char of a block ending in a hard_break does not span the break', () => {
+    // Document corruption. <p>ab<br></p>, textContent 'ab', issue on 'b'.
+    //
+    // The end-of-text position fallback used to overshoot the trailing
+    // hard_break, producing [from,to) = 'b' + <br>. The verify could not see it:
+    // `doc.textBetween` renders a leaf with no leafText argument as '', so the
+    // range read back as exactly 'b' and the guard PASSED. The decoration then
+    // spanned the line break, and a popover doing a range replace over [from,to)
+    // would delete it.
+    const para = schema.node('paragraph', null, [schema.text('ab'), schema.node('hard_break')]);
+    const doc = schema.node('doc', null, [para]);
+    const text = para.textContent; // 'ab'
+    const issue: GrammarIssue = {
+      id: 'trailing-br',
+      kind: 'spelling',
+      ruleKind: 'Spelling',
+      offset: 1,
+      length: 1,
+      originalText: 'b',
+      message: '',
+      suggestions: [],
+    };
+
+    const anchored = anchorIssues(doc, new Map([[text, [issue]]]), BOTH);
+
+    expect(anchored).toHaveLength(1);
+    const [a] = anchored;
+    expect(a.to - a.from).toBe(1); // exactly the one character 'b'
+    // Leaf-aware read: any leaf swallowed by the range would show as U+FFFC.
+    expect(doc.textBetween(a.from, a.to, undefined, '￼')).toBe('b');
+
+    // And the decoration derived from it must not cover the break either.
+    const [deco] = buildDecorations(doc, anchored).find();
+    expect(doc.textBetween(deco.from, deco.to, undefined, '￼')).toBe('b');
+  });
+
+  it('REGRESSION: drops an issue whose range would SPAN an interior hard_break', () => {
+    // <p>ab<br>cd</p>, textContent 'abcd'. An issue on 'bc' (offset 1, len 2)
+    // maps to a range that straddles the break — the offsets are individually
+    // correct, but no single range can cover 'b' and 'c' without swallowing the
+    // <br>. The leaf-BLIND verify used to wave this through: textBetween renders
+    // the break as '', so the range read back as exactly 'bc'.
+    //
+    // This is the second layer of the defence, and it is the only thing standing
+    // between a break-spanning range and a range replace that eats the break.
+    // Dropping the issue is the desired outcome.
+    const para = schema.node('paragraph', null, [
+      schema.text('ab'),
+      schema.node('hard_break'),
+      schema.text('cd'),
+    ]);
+    const doc = schema.node('doc', null, [para]);
+    const text = para.textContent; // 'abcd'
+    const issue: GrammarIssue = {
+      id: 'interior-br',
+      kind: 'spelling',
+      ruleKind: 'Spelling',
+      offset: 1,
+      length: 2,
+      originalText: 'bc',
+      message: '',
+      suggestions: [],
+    };
+
+    expect(anchorIssues(doc, new Map([[text, [issue]]]), BOTH)).toEqual([]);
+  });
+
   it('drops an issue whose originalText no longer matches the doc text at that offset', () => {
     // A hand-crafted poison entry: the cache key matches a live block, but the
     // issue's originalText disagrees with what actually sits at the offset.
@@ -224,19 +291,58 @@ describe('anchorIssues', () => {
     expect(anchorIssues(doc, cache, BOTH)).toEqual([]);
   });
 
-  it('NEVER mis-anchors: every anchored issue verifies against the live doc', () => {
-    // The load-bearing guarantee. Land an arbitrary cached scan result against
-    // an arbitrary document and assert the anchor is either correct or absent.
+  it('NEVER mis-anchors, and ALWAYS anchors when an anchor is guaranteed', () => {
+    // The load-bearing guarantee, as a TWO-SIDED property.
     //
-    // Strengthened over the brief in two ways:
-    //   1. Documents contain nested blocks and hard_breaks, not just flat
-    //      paragraphs of plain text.
-    //   2. The scanned text is usually text that REALLY EXISTS in some block
-    //      (possibly a since-edited one). Purely random `scannedText` almost
-    //      never matches a block, which would make the property vacuous — it
-    //      would pass against an implementation that anchors nothing at all.
-    //      `anchoredAtLeastOnce` below asserts non-vacuity.
-    let anchoredAtLeastOnce = 0;
+    // SOUNDNESS: land an arbitrary cached scan result against an arbitrary
+    // document; every issue that survives must sit on text that literally still
+    // equals what the engine flagged. The read-back is LEAF-AWARE (a swallowed
+    // hard_break renders as U+FFFC, not ''), so a range that spans a line break
+    // counts as a mis-anchor here — because a range replace over it would delete
+    // the break.
+    //
+    // COMPLETENESS: soundness alone is satisfied by an implementation that
+    // anchors NOTHING. So whenever an anchor is mathematically guaranteed — the
+    // live doc contains a block whose text is exactly the scanned text and whose
+    // children are all text nodes (no inline leaves in the way), and the issue's
+    // originalText really is the slice it claims — assert that an anchor came
+    // out. That is what a `forEach`-instead-of-`descendants` regression breaks:
+    // it silently skips every blockquote-nested block.
+    //
+    // The originalText is corrupted INDEPENDENTLY of the slice on a random
+    // branch. Without that, `originalText = scannedText.slice(...)` where
+    // `scannedText` is also the cache key makes the verify a tautology for every
+    // generated issue, and deleting the verify line leaves this property green.
+    let soundnessAnchors = 0; // runs that produced >= 1 anchor
+    let guaranteedRuns = 0; // runs that exercised the completeness assertion
+    let corruptedRuns = 0; // runs that exercised the drop-on-mismatch path
+
+    /** A range read back the way a range REPLACE would see it: leaves included. */
+    const readBack = (doc: PMNode, from: number, to: number) =>
+      doc.textBetween(from, to, undefined, '￼');
+
+    /**
+     * Does `doc` hold a textblock with exactly this text and NO inline leaf
+     * nodes? Such a block anchors deterministically: its char offsets are its
+     * content offsets, so nothing can be unaddressable and no leaf can fall
+     * inside the range. Computed independently of the implementation.
+     */
+    function hasPlainBlockWithText(doc: PMNode, text: string): boolean {
+      let found = false;
+      doc.descendants((node) => {
+        if (found) return false;
+        if (!node.isTextblock) return true;
+        if (node.textContent === text) {
+          let plain = true;
+          node.forEach((child) => {
+            if (!child.isText) plain = false;
+          });
+          if (plain) found = true;
+        }
+        return false;
+      });
+      return found;
+    }
 
     /** An inline run: plain text, or a hard_break. */
     const inlineArb = fc.oneof(
@@ -291,6 +397,10 @@ describe('anchorIssues', () => {
         // A fully random scanned text, used when we deliberately want a miss.
         fc.string({ minLength: 1, maxLength: 20 }),
         fc.boolean(),
+        // Corrupt originalText INDEPENDENTLY of the slice, so the drop path is
+        // a randomized guarantee rather than a tautology.
+        fc.boolean(),
+        fc.string({ minLength: 1, maxLength: 20 }),
         (
           specsA,
           specsB,
@@ -300,6 +410,8 @@ describe('anchorIssues', () => {
           rawLen,
           randomText,
           useRandomText,
+          corruptOriginal,
+          corruptText,
         ) => {
           const scannedDoc = buildDoc(specsA);
           const liveDoc = landOnSameDoc ? scannedDoc : buildDoc(specsB);
@@ -312,31 +424,56 @@ describe('anchorIssues', () => {
 
           const offset = rawOffset % scannedText.length;
           const length = Math.max(1, (rawLen % (scannedText.length - offset)) || 1);
+          const slice = scannedText.slice(offset, offset + length);
+
+          // The engine's claim about what it flagged. On the corrupt branch it
+          // is unrelated to what actually sits at [offset, offset+length) — the
+          // exact shape of a stale/buggy result that MUST be dropped.
+          const originalText = corruptOriginal ? corruptText : slice;
+          const reallyCorrupted = originalText !== slice;
+          if (reallyCorrupted) corruptedRuns++;
+
           const issue: GrammarIssue = {
             id: 'x',
             kind: 'spelling',
             ruleKind: 'Spelling',
             offset,
             length,
-            originalText: scannedText.slice(offset, offset + length),
+            originalText,
             message: '',
             suggestions: [],
           };
           const cache: IssueCache = new Map([[scannedText, [issue]]]);
 
           const anchored = anchorIssues(liveDoc, cache, BOTH);
-          if (anchored.length > 0) anchoredAtLeastOnce++;
+          if (anchored.length > 0) soundnessAnchors++;
 
-          // The guarantee: anything we render sits on text that literally
-          // still equals what the engine flagged.
-          return anchored.every((a) => liveDoc.textBetween(a.from, a.to) === a.originalText);
+          // SOUNDNESS: anything we render sits on text that literally still
+          // equals what the engine flagged — leaves included.
+          if (!anchored.every((a) => readBack(liveDoc, a.from, a.to) === a.originalText)) {
+            return false;
+          }
+
+          // COMPLETENESS: when the answer is forced, it must actually come out.
+          const anchorGuaranteed = !reallyCorrupted && hasPlainBlockWithText(liveDoc, scannedText);
+          if (anchorGuaranteed) {
+            guaranteedRuns++;
+            if (anchored.length === 0) return false;
+          }
+
+          return true;
         },
       ),
       { numRuns: 500 },
     );
 
-    // Non-vacuity: the property above must actually have anchored things.
-    expect(anchoredAtLeastOnce).toBeGreaterThan(50);
+    // Non-vacuity. Each branch of the property above must actually have been
+    // reached — a floor of "> 0" is the honest bound; any larger magic number is
+    // a number nobody can defend, and a regression that halves the hit rate
+    // still clears it.
+    expect(soundnessAnchors).toBeGreaterThan(0);
+    expect(guaranteedRuns).toBeGreaterThan(0); // the completeness half ran
+    expect(corruptedRuns).toBeGreaterThan(0); // the drop-on-mismatch path ran
   });
 
   // Spec §9: no-flicker, mirroring the existing ghost-text stability test.
@@ -732,6 +869,48 @@ describe('grammar-check plugin view', () => {
 
     expect(check).toHaveBeenCalledTimes(1);
     expect(ps.issues).toHaveLength(1);
+
+    view.destroy();
+  });
+
+  it('reschedules a scan when ONLY the grammar category is toggled on', async () => {
+    // The Task 7 toolbar has two INDEPENDENT checkboxes, so a real toggle flips
+    // exactly one flag. A test that only ever flips both at once cannot tell
+    // `before.spelling !== after.spelling || before.grammar !== after.grammar`
+    // apart from a mutant that compares `spelling` alone — and that mutant
+    // silently never wakes the debounce for a grammar-only toggle.
+    const check = vi.fn(async (text: string) => [sentanceIssue(text)]);
+    const view = mount(check, [TEXT], { spelling: false, grammar: false });
+
+    await settle(view);
+    expect(check).not.toHaveBeenCalled();
+
+    // spelling stays FALSE; only grammar flips.
+    view.dispatch(view.state.tr.setMeta(grammarCheckKey, setGrammarEnabled(false, true)));
+    await settle(view);
+
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(check).toHaveBeenCalledWith(TEXT);
+
+    view.destroy();
+  });
+
+  it('reschedules a scan when ONLY the spelling category is toggled on', async () => {
+    // The mirror of the test above: kills the mutant that compares `grammar`
+    // alone. Together the two pin both disjuncts of `enabledChanged`.
+    const check = vi.fn(async (text: string) => [sentanceIssue(text)]);
+    const view = mount(check, [TEXT], { spelling: false, grammar: false });
+
+    await settle(view);
+    expect(check).not.toHaveBeenCalled();
+
+    // grammar stays FALSE; only spelling flips.
+    view.dispatch(view.state.tr.setMeta(grammarCheckKey, setGrammarEnabled(true, false)));
+    const ps = await settle(view);
+
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(check).toHaveBeenCalledWith(TEXT);
+    expect(ps.issues).toHaveLength(1); // the spelling issue now renders
 
     view.destroy();
   });
