@@ -206,16 +206,28 @@ export function createGrammarCheckPlugin(options: GrammarCheckOptions): Plugin<G
         update: (updatedView: EditorView, prevState) => {
           const docChanged = !updatedView.state.doc.eq(prevState.doc);
 
+          const before = grammarCheckKey.getState(prevState);
+          const after = grammarCheckKey.getState(updatedView.state);
+
           // Enabling a category is not a doc change, but it does create work:
           // blocks skipped while the feature was off have never been scanned.
           // Without this, turning grammar check on would show nothing until the
           // user's next keystroke.
-          const before = grammarCheckKey.getState(prevState)?.enabled;
-          const after = grammarCheckKey.getState(updatedView.state)?.enabled;
           const enabledChanged =
-            before?.spelling !== after?.spelling || before?.grammar !== after?.grammar;
+            before?.enabled.spelling !== after?.enabled.spelling ||
+            before?.enabled.grammar !== after?.enabled.grammar;
 
-          if (docChanged || enabledChanged) schedule();
+          // clearGrammarCache() (Ignore / Add-to-dictionary) replaces the cache
+          // with a fresh empty Map. That is neither a doc change nor an enabled
+          // change, yet it empties `issues` for the WHOLE document — every
+          // squiggly vanishes. Without waking the debounce here, nothing would
+          // repopulate them until the user's next keystroke. A scanResult only
+          // ever GROWS the cache (cacheSet always inserts the block's key, so
+          // size > 0 afterward even when check() returned []), so the empty-cache
+          // guard fires solely on a clear and can never form a reschedule loop.
+          const cacheCleared = before?.cache !== after?.cache && after?.cache.size === 0;
+
+          if (docChanged || enabledChanged || cacheCleared) schedule();
         },
         destroy: () => {
           destroyed = true;

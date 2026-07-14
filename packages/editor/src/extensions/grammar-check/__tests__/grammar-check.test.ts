@@ -1208,6 +1208,43 @@ describe('grammar-check plugin view', () => {
     view.destroy();
   });
 
+  it('reschedules a scan after clearGrammarCache() so still-valid issues come back', async () => {
+    // The bug: clearGrammarCache() (what Ignore / Add-to-dictionary dispatch)
+    // empties the cache, so `issues` is recomputed to [] and every squiggly in
+    // the document disappears. But a clearCache is neither a doc change nor an
+    // enabled change, so the view.update() hook would never reschedule scan() —
+    // the warnings would stay gone until the next keystroke. This test drives
+    // the REAL view/scheduler layer (not state.apply directly), which is where
+    // that bug lives.
+    const check = vi.fn(async (text: string) => [sentanceIssue(text)]);
+    const view = mount(check, [TEXT]);
+
+    // 1. Initial scan caches + anchors the issue.
+    let ps = await settle(view);
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(ps.issues).toHaveLength(1);
+    expect(ps.cache.size).toBe(1);
+
+    // 2. Dispatch clearGrammarCache() with NO doc edit. The cache empties and
+    //    all issues vanish immediately.
+    check.mockClear();
+    view.dispatch(view.state.tr.setMeta(grammarCheckKey, clearGrammarCache()));
+    ps = grammarCheckKey.getState(view.state)!;
+    expect(ps.cache.size).toBe(0);
+    expect(ps.issues).toEqual([]);
+
+    // 3. Advance past the debounce again: the rescan must fire.
+    ps = await settle(view);
+
+    // 4. check() ran AGAIN and the still-valid issue is re-anchored.
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(check).toHaveBeenCalledWith(TEXT);
+    expect(ps.cache.size).toBe(1);
+    expect(ps.issues).toHaveLength(1);
+
+    view.destroy();
+  });
+
   it('does not reschedule a scan for a transaction that leaves the doc unchanged', async () => {
     const check = vi.fn(async (_text: string): Promise<GrammarIssue[]> => []);
     const view = mount(check, [TEXT]);
