@@ -37,21 +37,59 @@ export class GrammarEngine {
     return issues;
   }
 
+  /**
+   * `Lint`, `Span`, and `Suggestion` are wasm-bindgen handles backed by the
+   * WASM heap. `check()` runs on every edit in a live as-you-type checker,
+   * so we free each handle deterministically as soon as its data has been
+   * copied out, rather than relying on the FinalizationRegistry (GC is
+   * non-deterministic and lets WASM heap pressure build under rapid typing).
+   *
+   * Ordering is load-bearing: every value must be read out of a handle
+   * *before* that handle is freed — freeing then reading is a
+   * use-after-free. In particular, `contextHash` needs `lint` to still be
+   * alive, so it's awaited before `lint.free()` runs.
+   */
   private async toIssue(blockText: string, lint: Lint): Promise<GrammarIssue> {
-    const span = lint.span();
-    const ruleKind = lint.lint_kind();
-    const hash = await this.linter.contextHash(blockText, lint);
+    try {
+      const span = lint.span();
+      let offset: number;
+      let length: number;
+      try {
+        offset = span.start;
+        length = span.end - span.start;
+      } finally {
+        span.free();
+      }
 
-    return {
-      id: String(hash),
-      kind: SPELLING_KINDS.has(ruleKind) ? 'spelling' : 'grammar',
-      ruleKind,
-      offset: span.start,
-      length: span.end - span.start,
-      originalText: lint.get_problem_text(),
-      message: lint.message(),
-      suggestions: lint.suggestions().map((s) => s.get_replacement_text()),
-    };
+      const ruleKind = lint.lint_kind();
+      const originalText = lint.get_problem_text();
+      const message = lint.message();
+
+      const suggestionHandles = lint.suggestions();
+      let suggestions: string[];
+      try {
+        suggestions = suggestionHandles.map((s) => s.get_replacement_text());
+      } finally {
+        for (const s of suggestionHandles) s.free();
+      }
+
+      // Must be awaited while `lint` is still live — `lint.free()` runs in
+      // the outer `finally` below, after this resolves.
+      const hash = await this.linter.contextHash(blockText, lint);
+
+      return {
+        id: String(hash),
+        kind: SPELLING_KINDS.has(ruleKind) ? 'spelling' : 'grammar',
+        ruleKind,
+        offset,
+        length,
+        originalText,
+        message,
+        suggestions,
+      };
+    } finally {
+      lint.free();
+    }
   }
 
   /** Add a word to the personal dictionary. */
