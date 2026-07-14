@@ -33,8 +33,17 @@ import { textOffsetToPos } from './positions';
  * CHARACTER, the standard placeholder for an embedded object) makes any leaf
  * inside the range visible to the comparison, so it can never silently match.
  *
- * Block text never contains U+FFFC — it is what `textContent` omits — so this
- * can only ever cause a mismatch where a leaf is genuinely inside the range.
+ * This is NOT safe because "block text never contains U+FFFC" — it can: a user
+ * can paste one, and `textContent` carries it through unchanged. The guard's
+ * actual safety is LENGTH: a leaf-substituted readback is strictly longer than
+ * an honest `originalText` (each swallowed leaf adds one placeholder character
+ * that the honest slice never has), so a range that swallows a leaf cannot
+ * match an honest `originalText` of the same nominal length. That argument
+ * depends on `originalText` actually BEING an honest slice of the scanned
+ * text — `anchorIssues` additionally rejects any `originalText` that itself
+ * contains this placeholder before anchoring, so a crafted/dishonest
+ * `originalText` can never exploit the length gap by containing the sentinel
+ * itself. See the `includes(LEAF_PLACEHOLDER)` check below.
  */
 const LEAF_PLACEHOLDER = '￼';
 
@@ -118,13 +127,20 @@ export function anchorIssues(
         if (issue.kind === 'spelling' && !enabled.spelling) continue;
         if (issue.kind === 'grammar' && !enabled.grammar) continue;
 
-        const from = textOffsetToPos(block, pos, issue.offset);
-        const to = textOffsetToPos(block, pos, issue.offset + issue.length);
+        // `originalText` and `offset`/`length` come from two SEPARATE calls into
+        // the grammar engine (`lint.get_problem_text()` vs `span()`); nothing
+        // enforces that they agree. The leaf-aware verify below is safe only
+        // because an honest `originalText` can never equal a leaf-substituted
+        // readback (see LEAF_PLACEHOLDER) — but a `originalText` that itself
+        // contains the placeholder sentinel could defeat that length argument
+        // by construction, so reject it structurally before anchoring rather
+        // than rely on the readback comparison alone.
+        if (issue.originalText.includes(LEAF_PLACEHOLDER)) continue;
+
+        const from = textOffsetToPos(block, pos, issue.offset, 'start');
+        const to = textOffsetToPos(block, pos, issue.offset + issue.length, 'end');
         if (from === null || to === null) continue;
 
-        // Verify. Non-negotiable. LEAF-AWARE: see LEAF_PLACEHOLDER. A range that
-        // spans an inline leaf can never silently match, so a break-spanning
-        // issue is dropped rather than rendered over a line break.
         // Verify. Non-negotiable. LEAF-AWARE: see LEAF_PLACEHOLDER. A range that
         // spans an inline leaf can never silently match, so a break-spanning
         // issue is dropped rather than rendered over a line break.

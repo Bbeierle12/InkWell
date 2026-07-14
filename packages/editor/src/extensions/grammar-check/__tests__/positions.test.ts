@@ -75,8 +75,8 @@ describe('textOffsetToPos', () => {
     const block = doc.child(0);
     expect(block.textContent).toBe('ab');
 
-    const from = textOffsetToPos(block, 0, 1)!;
-    const to = textOffsetToPos(block, 0, 2)!;
+    const from = textOffsetToPos(block, 0, 1, 'start')!;
+    const to = textOffsetToPos(block, 0, 2, 'end')!;
 
     expect(from).toBe(2);
     expect(to).toBe(3); // NOT 4 — the break must stay outside the range
@@ -91,12 +91,41 @@ describe('textOffsetToPos', () => {
     const doc = buildDoc(['a', 'BR', 'b']);
     const block = doc.child(0);
 
-    const from = textOffsetToPos(block, 0, 1)!;
-    const to = textOffsetToPos(block, 0, 2)!;
+    const from = textOffsetToPos(block, 0, 1, 'start')!;
+    const to = textOffsetToPos(block, 0, 2, 'end')!;
 
     expect(from).toBe(3); // after the break
     expect(to).toBe(4);
     expect(doc.textBetween(from, to)).toBe('b');
+  });
+
+  it('REGRESSION: an END position does not skip forward past an INTERIOR break that sits right after the last included character', () => {
+    // Found by strengthening the property test below to be leaf-boundary-aware
+    // (see the property's comment): <p>x<br>y</p>, textContent 'xy'. An issue
+    // on JUST 'x' (offset 0, length 1) never touches 'y'. But the mid-loop
+    // boundary-deferral that correctly walks a START position forward past a
+    // non-text sibling (so `from` lands on real text, not a leaf) was, before
+    // this fix, applied UNCONDITIONALLY — including when resolving the END of
+    // the SAME range. That walked `to` forward past the <br> as well, to the
+    // start of 'y', producing range [from, to) = 'x' + <br>: a replace over it
+    // would delete the break even though the issue never touched 'y'.
+    //
+    // This is the same corruption shape as the already-fixed end-of-block
+    // case, just occurring mid-document at an interior boundary instead of at
+    // the block's very end. The fix: `textOffsetToPos` takes a `direction`
+    // parameter, and an 'end' position resolves immediately once `offset`
+    // equals the characters consumed so far, without deferring past a
+    // following leaf.
+    const doc = buildDoc(['x', 'BR', 'y']);
+    const block = doc.child(0);
+    expect(block.textContent).toBe('xy');
+
+    const from = textOffsetToPos(block, 0, 0, 'start')!;
+    const to = textOffsetToPos(block, 0, 1, 'end')!;
+
+    expect(from).toBe(1);
+    expect(to).toBe(2); // right after 'x' — BEFORE the <br>, not after it
+    expect(doc.textBetween(from, to, undefined, '￼')).toBe('x');
   });
 
   it('maps the end offset of a block whose LAST child carries its own text', () => {
@@ -112,8 +141,8 @@ describe('textOffsetToPos', () => {
     const block = doc.child(0);
     expect(block.textContent).toBe('ax');
 
-    const from = textOffsetToPos(block, 0, 0)!;
-    const to = textOffsetToPos(block, 0, 2)!; // end of 'ax'
+    const from = textOffsetToPos(block, 0, 0, 'start')!;
+    const to = textOffsetToPos(block, 0, 2, 'end')!; // end of 'ax'
 
     expect(doc.textBetween(from, to)).toBe('ax');
   });
@@ -164,7 +193,18 @@ describe('textOffsetToPos', () => {
     expect(doc.textBetween(pos, pos + 1)).toBe('b');
   });
 
-  it('property: slicing textContent by [offset, offset+len) always equals textBetween of the mapped positions', () => {
+  it('property: slicing textContent by [offset, offset+len) always equals the LEAF-AWARE textBetween of the mapped positions, and the mapped range never STARTS OR ENDS on a leaf', () => {
+    // Leaf-BLIND (`doc.textBetween(from, to)` with no leafText arg) renders a
+    // leaf as '' — a range that wrongly swallows a hard_break still compares
+    // equal to the text slice, so this property would stay green even with the
+    // trailing-overshoot bug reverted. Passing a leafText placeholder makes a
+    // swallowed leaf visible to the comparison.
+    //
+    // A mapped range MAY legitimately CONTAIN a leaf — that's unavoidable for an
+    // interior break, e.g. `<p>a<br>b</p>` offset 0 len 2 spans the break by
+    // necessity. What it must NEVER do is START or END on one: that would mean
+    // the range includes only part of the break's "slot," which is exactly the
+    // overshoot/undershoot shape the trailing-leaf bug produced.
     fc.assert(
       fc.property(
         fc.array(
@@ -185,14 +225,70 @@ describe('textOffsetToPos', () => {
           const offset = rawOffset % text.length;
           const len = Math.max(1, (rawLen % (text.length - offset)) || 1);
 
-          const from = textOffsetToPos(block, 0, offset);
-          const to = textOffsetToPos(block, 0, offset + len);
+          const from = textOffsetToPos(block, 0, offset, 'start');
+          const to = textOffsetToPos(block, 0, offset + len, 'end');
           if (from === null || to === null) return true; // unaddressable is allowed
 
-          return doc.textBetween(from, to) === text.slice(offset, offset + len);
+          const rb = doc.textBetween(from, to, undefined, '￼');
+          return (
+            !rb.startsWith('￼') &&
+            !rb.endsWith('￼') &&
+            rb.split('￼').join('') === text.slice(offset, offset + len)
+          );
         },
       ),
       { numRuns: 300 },
     );
+  });
+
+  describe('regression pins: hand-checked offset -> position answers around trailing/leading/only breaks', () => {
+    it('<p>ab<br><br></p> offset 2 -> position 3 (consecutive trailing breaks)', () => {
+      // Content positions: 'a'=[1,2), 'b'=[2,3), <br>=[3,4), <br>=[4,5). offset
+      // 2 is the end of textContent ('ab', length 2). The end-of-text fallback
+      // must resolve to `posAfterText` (the position right after 'b') and skip
+      // PAST BOTH trailing breaks, not just one — a fallback that used raw
+      // `posCursor` would land at 5 (after the second break) instead of 3.
+      const doc = buildDoc(['ab', 'BR', 'BR']);
+      const block = doc.child(0);
+      expect(block.textContent).toBe('ab');
+
+      expect(textOffsetToPos(block, 0, 2, 'end')).toBe(3);
+    });
+
+    it('<p><br>ab</p> offset 0 -> position 2 (leading break)', () => {
+      // The leading <br> occupies position [1,2); 'a' starts at position 2.
+      // offset 0 ('a' in textContent 'ab') must resolve AFTER the break, not at
+      // contentStart (which would land inside/before the break's own slot).
+      const doc = buildDoc(['BR', 'ab']);
+      const block = doc.child(0);
+      expect(block.textContent).toBe('ab');
+
+      const from = textOffsetToPos(block, 0, 0)!;
+      expect(from).toBe(2);
+      const to = textOffsetToPos(block, 0, 2)!;
+      expect(doc.textBetween(from, to, undefined, '￼')).toBe('ab');
+    });
+
+    it('<p><br></p> offset 0 -> position 1 (block with ONLY a break, no text node)', () => {
+      // textContent is '' (the break contributes nothing). Offset 0 is
+      // immediately the end-of-text case; the fallback must resolve to
+      // `contentStart + posAfterText` = 1 + 0 = 1 (BEFORE the break), not walk
+      // past the break's position span.
+      const doc = buildDoc(['BR']);
+      const block = doc.child(0);
+      expect(block.textContent).toBe('');
+
+      expect(textOffsetToPos(block, 0, 0)).toBe(1);
+    });
+
+    it('<p></p> offset 0 -> position 1 (empty block, no children at all)', () => {
+      // No children to walk at all; the end-of-text fallback must still fire
+      // (the loop trivially completes) and resolve to contentStart.
+      const doc = buildDoc([]);
+      const block = doc.child(0);
+      expect(block.textContent).toBe('');
+
+      expect(textOffsetToPos(block, 0, 0)).toBe(1);
+    });
   });
 });

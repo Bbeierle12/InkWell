@@ -25,23 +25,38 @@ import type { Node as PMNode } from '@tiptap/pm/model';
  * span be walked past first, so the boundary offset resolves to the correct
  * side.
  *
- * @param block    The top-level block node (e.g. a paragraph).
- * @param blockPos The document position of `block` itself (i.e. the position
- *                 immediately BEFORE it). Its content starts at blockPos + 1.
- * @param offset   Character offset into `block.textContent`.
+ * @param block     The top-level block node (e.g. a paragraph).
+ * @param blockPos  The document position of `block` itself (i.e. the position
+ *                  immediately BEFORE it). Its content starts at blockPos + 1.
+ * @param offset    Character offset into `block.textContent`.
+ * @param direction Which end of a [from, to) range this call is resolving.
+ *                  Matters ONLY when `offset` lands exactly at a text node's
+ *                  end and is followed by a non-text sibling that contributes
+ *                  no characters (e.g. a hard_break) before more text: a
+ *                  'start' position should skip forward past it to land on
+ *                  the next real character (so `from` never sits awkwardly
+ *                  before a leaf it isn't including), while an 'end' position
+ *                  must stop immediately, right after the last character
+ *                  actually included — walking forward would silently widen
+ *                  the range to swallow that leaf, exactly the shape of a
+ *                  corrupting replace. Defaults to 'start' for source
+ *                  compatibility with callers computing only a single point.
  * @returns The absolute document position, or `null` if `offset` is out of
  *          range or lands inside a non-text inline node's interior (there is
  *          no single ProseMirror position that addresses "partway through" a
  *          leaf/atom node's text representation).
  *
  * Invariant (property-tested): for any addressable [offset, offset+len),
- *   doc.textBetween(map(offset), map(offset + len))
- *     === block.textContent.slice(offset, offset + len)
+ * calling with direction 'start' for `offset` and 'end' for `offset + len`
+ * yields a range [from, to) such that reading it back leaf-aware never
+ * starts or ends on a leaf, and with leaves stripped equals
+ *   block.textContent.slice(offset, offset + len)
  */
 export function textOffsetToPos(
   block: PMNode,
   blockPos: number,
   offset: number,
+  direction: 'start' | 'end' = 'start',
 ): number | null {
   if (offset < 0) return null;
 
@@ -54,6 +69,18 @@ export function textOffsetToPos(
   let posAfterText = 0;
 
   for (let i = 0; i < block.childCount; i++) {
+    // An 'end' position that has already accounted for every character up to
+    // `offset` must resolve HERE, before any following non-text sibling (that
+    // contributes no characters) is walked. Otherwise the loop would defer
+    // past it exactly the way a 'start' position correctly does, and the
+    // resulting range would swallow a leaf between the last included
+    // character and the next one — an interior sibling of the bug already
+    // fixed for the end-of-block case below, just mid-document instead of at
+    // the block's very end.
+    if (direction === 'end' && offset === textCursor) {
+      return contentStart + posCursor;
+    }
+
     const child = block.child(i);
 
     if (child.isText) {

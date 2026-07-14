@@ -2,7 +2,12 @@
  * Grammar-check plugin tests.
  *
  * The load-bearing guarantee (spec §5.3): an issue is rendered ONLY if
- *   doc.textBetween(from, to) === issue.originalText
+ *   doc.textBetween(from, to, undefined, LEAF_PLACEHOLDER) === issue.originalText
+ * i.e. the read-back is LEAF-AWARE (a leaf swallowed by [from, to) renders as
+ * U+FFFC, not the empty string), so a range that spans a hard_break can never
+ * silently match. `originalText` is also rejected outright if it itself
+ * contains the placeholder sentinel, closing the one gap the length argument
+ * alone doesn't cover (see LEAF_PLACEHOLDER's doc comment in state.ts).
  * Everything else is dropped silently. The 500-run property test below is the
  * proof; the rest of this file pins the behaviour that surrounds it.
  *
@@ -248,6 +253,75 @@ describe('anchorIssues', () => {
     };
 
     expect(anchorIssues(doc, new Map([[text, [issue]]]), BOTH)).toEqual([]);
+  });
+
+  it('REGRESSION: an issue immediately before an interior hard_break does not have its end swallow the break', () => {
+    // <p>x<br>y</p>, textContent 'xy'. An issue on JUST 'x' (offset 0, length
+    // 1) never touches 'y'. Before textOffsetToPos grew a direction-aware end
+    // position, the boundary-deferral that correctly walks a START position
+    // forward past a leaf (so `from` lands on real text) was applied to the
+    // END position too, extending [from, to) to 'x' + <br> — a range replace
+    // over it would delete the break even though the issue never touched 'y'.
+    // Found by strengthening positions.test.ts's property to be leaf-boundary
+    // aware; see the REGRESSION test of the same name there.
+    const para = schema.node('paragraph', null, [
+      schema.text('x'),
+      schema.node('hard_break'),
+      schema.text('y'),
+    ]);
+    const doc = schema.node('doc', null, [para]);
+    const text = para.textContent; // 'xy'
+    const issue: GrammarIssue = {
+      id: 'pre-br',
+      kind: 'spelling',
+      ruleKind: 'Spelling',
+      offset: 0,
+      length: 1,
+      originalText: 'x',
+      message: '',
+      suggestions: [],
+    };
+
+    const anchored = anchorIssues(doc, new Map([[text, [issue]]]), BOTH);
+
+    expect(anchored).toHaveLength(1);
+    const [a] = anchored;
+    expect(a.to - a.from).toBe(1);
+    expect(doc.textBetween(a.from, a.to, undefined, '￼')).toBe('x');
+  });
+
+  it('drops an issue whose originalText itself contains the leaf placeholder sentinel, rather than trusting the length argument alone', () => {
+    // The leaf-aware verify's safety rests on an honest `originalText` never
+    // being able to equal a leaf-substituted readback, because the readback is
+    // strictly longer. But `originalText` (from the engine's
+    // `lint.get_problem_text()`) and `offset`/`length` (from a separate
+    // `span()` call) are not enforced to agree — a crafted `originalText` of
+    // 'a￼b' is the SAME LENGTH as a leaf-substituted readback of a genuine
+    // 2-character span straddling a break, defeating the length argument by
+    // construction. <p>a<br>b</p>: offset 0, length 3 maps to [1,4), and the
+    // honest leaf-aware readback of that range is exactly 'a￼b' — so without
+    // a structural rejection of the sentinel in originalText itself, this
+    // poisoned entry would anchor and re-open the corruption the leaf-aware
+    // guard exists to prevent.
+    const para = schema.node('paragraph', null, [
+      schema.text('a'),
+      schema.node('hard_break'),
+      schema.text('b'),
+    ]);
+    const doc = schema.node('doc', null, [para]);
+    const text = para.textContent; // 'ab'
+    const poison: GrammarIssue = {
+      id: 'sentinel-poison',
+      kind: 'spelling',
+      ruleKind: 'Spelling',
+      offset: 0,
+      length: 2,
+      originalText: 'a￼b',
+      message: '',
+      suggestions: [],
+    };
+
+    expect(anchorIssues(doc, new Map([[text, [poison]]]), BOTH)).toEqual([]);
   });
 
   it('drops an issue whose originalText no longer matches the doc text at that offset', () => {
