@@ -228,8 +228,8 @@ export default function Home() {
   }, [editor, title, setTitle]);
 
   const handleAIOperation = useCallback(
-    (operation: OperationType) => {
-      executeOperation(operation);
+    (operation: OperationType, args?: string) => {
+      executeOperation(operation, args);
     },
     [executeOperation],
   );

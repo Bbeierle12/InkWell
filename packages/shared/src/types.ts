@@ -10,6 +10,7 @@ export enum OperationType {
   Expand = 'expand',
   Critique = 'deep_critique',
   VoiceRefine = 'voice_refine',
+  Proofread = 'proofread',
 }
 
 /** Target model for inference routing. */

@@ -10,6 +10,7 @@ import { summarizeTemplate } from './summarize';
 import { expandTemplate } from './expand';
 import { critiqueTemplate } from './critique';
 import { voiceRefineTemplate } from './voice-refine';
+import { proofreadTemplate } from './proofread';
 
 export interface PromptTemplate {
   /** System prompt sent as the system parameter. */
@@ -24,6 +25,7 @@ const templateMap: Record<string, PromptTemplate> = {
   [OperationType.Expand]: expandTemplate,
   [OperationType.Critique]: critiqueTemplate,
   [OperationType.VoiceRefine]: voiceRefineTemplate,
+  [OperationType.Proofread]: proofreadTemplate,
 };
 
 /**
