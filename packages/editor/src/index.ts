@@ -10,5 +10,6 @@ export * from './transactions';
 export * from './extensions/ghost-text';
 export * from './extensions/slash-commands';
 export * from './extensions/diff-preview';
+export * from './extensions/grammar-check';
 export * from './extensions/ai-undo';
 export * from './collaboration';
