@@ -692,6 +692,11 @@ function ReviewRibbon({
   editor: Editor | null;
   onAIOperation: (op: OperationType, args?: string) => void;
 }) {
+  const grammarSpelling = useSettingsStore((s) => s.grammarSpelling);
+  const grammarGrammar = useSettingsStore((s) => s.grammarGrammar);
+  const setGrammarSpelling = useSettingsStore((s) => s.setGrammarSpelling);
+  const setGrammarGrammar = useSettingsStore((s) => s.setGrammarGrammar);
+
   return (
     <>
       <Group label="Proofing">
@@ -714,8 +719,8 @@ function ReviewRibbon({
               }
               label="Spell"
               ariaLabel="Spell"
-              disabled={!editor}
-              onClick={() => onAIOperation(OperationType.Proofread)}
+              active={grammarSpelling}
+              onClick={() => setGrammarSpelling(!grammarSpelling)}
             />
             <SmallButton
               icon={
@@ -725,8 +730,8 @@ function ReviewRibbon({
               }
               label="Grammar"
               ariaLabel="Grammar"
-              disabled={!editor}
-              onClick={() => onAIOperation(OperationType.Proofread)}
+              active={grammarGrammar}
+              onClick={() => setGrammarGrammar(!grammarGrammar)}
             />
           </div>
         </div>

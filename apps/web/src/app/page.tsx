@@ -13,6 +13,8 @@ import {
   AIUndo,
   SlashCommands,
   GrammarCheck,
+  grammarCheckKey,
+  setGrammarEnabled,
 } from '@inkwell/editor';
 import type { SlashCommandItem } from '@inkwell/editor';
 
@@ -70,6 +72,7 @@ export default function Home() {
     editorWidth,
     spellCheck,
     grammarSpelling,
+    grammarGrammar,
     ghostTextEnabled,
   } = useSettingsStore();
 
@@ -196,6 +199,16 @@ export default function Home() {
       },
     });
   }, [editor, spellCheck, grammarSpelling]);
+
+  // Propagate grammar category toggles into the live plugin. TipTap freezes
+  // extension options at construction, so the plugin's initial spelling/grammar
+  // options never update on their own — we must dispatch the meta.
+  useEffect(() => {
+    if (!editor) return;
+    editor.view.dispatch(
+      editor.state.tr.setMeta(grammarCheckKey, setGrammarEnabled(grammarSpelling, grammarGrammar)),
+    );
+  }, [editor, grammarSpelling, grammarGrammar]);
 
   const handleSlashCommand = useCallback(
     (operation: OperationType, args?: string) => {
