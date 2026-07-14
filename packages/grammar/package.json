@@ -1,0 +1,19 @@
+{
+  "name": "@inkwell/grammar",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "harper.js": "^2.4.0"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.8"
+  }
+}
