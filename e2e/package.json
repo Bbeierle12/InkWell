@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:export": "playwright test -c playwright.export.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1"
