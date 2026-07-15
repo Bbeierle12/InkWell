@@ -1,6 +1,34 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { createLocalEngine } from '../index';
+import { createLocalEngine, toAbsoluteWasmUrl } from '../index';
 import type { GrammarEngine } from '../index';
+
+describe('toAbsoluteWasmUrl', () => {
+  // Regression guard: harper's WorkerLinter runs in a blob-origin worker that
+  // cannot fetch a ROOT-RELATIVE wasm URL. createWorkerEngine must anchor it to
+  // the page origin. See engine.ts createWorkerEngine.
+  it('anchors a root-relative wasm URL to the page origin', () => {
+    expect(
+      toAbsoluteWasmUrl('/_next/static/media/harper_wasm_bg.abc123.wasm', 'http://localhost:3000/'),
+    ).toBe('http://localhost:3000/_next/static/media/harper_wasm_bg.abc123.wasm');
+  });
+
+  it('resolves against a deep page path, not just the origin root', () => {
+    expect(toAbsoluteWasmUrl('/media/x.wasm', 'http://localhost:3000/docs/note')).toBe(
+      'http://localhost:3000/media/x.wasm',
+    );
+  });
+
+  it('leaves an already-absolute URL unchanged', () => {
+    const abs = 'https://cdn.example.com/harper.wasm';
+    expect(toAbsoluteWasmUrl(abs, 'http://localhost:3000/')).toBe(abs);
+  });
+
+  it('works for a Tauri-style custom-protocol origin', () => {
+    expect(toAbsoluteWasmUrl('/media/x.wasm', 'https://tauri.localhost/index.html')).toBe(
+      'https://tauri.localhost/media/x.wasm',
+    );
+  });
+});
 
 describe('GrammarEngine', () => {
   let engine: GrammarEngine;

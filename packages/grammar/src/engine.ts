@@ -1,4 +1,10 @@
-import { LocalLinter, WorkerLinter, type Linter, type Lint } from 'harper.js';
+import {
+  LocalLinter,
+  WorkerLinter,
+  createBinaryModuleFromUrl,
+  type Linter,
+  type Lint,
+} from 'harper.js';
 import { binary } from 'harper.js/binary';
 import { binaryInlined } from 'harper.js/binaryInlined';
 import { type GrammarIssue, SPELLING_KINDS } from './types';
@@ -120,9 +126,38 @@ export class GrammarEngine {
   }
 }
 
-/** Browser factory. Harper runs the WASM on its own worker thread. */
+/**
+ * Browser factory. Harper runs the WASM on its own Web Worker thread.
+ *
+ * `WorkerLinter`'s worker is created from a Blob (`URL.createObjectURL`), so it
+ * runs in an opaque `blob:` origin with no base URL. harper's default `binary`
+ * module resolves the `.wasm` via a ROOT-RELATIVE URL (e.g.
+ * `/_next/static/media/harper_wasm_bg.<hash>.wasm` under a bundler). A blob
+ * worker cannot fetch a root-relative URL — it has no base to resolve it
+ * against — and `fetch()` throws "Failed to parse URL". The failure is silent:
+ * `setup()` rejects, `check()` rejects, and callers that swallow scan errors
+ * simply render no results.
+ *
+ * Fix: rebuild the binary module with an ABSOLUTE URL, resolved against the
+ * page's own location, before handing it to the worker. This works for the web
+ * build (http origin) and the Tauri webview (custom-protocol origin) alike,
+ * with no bundle-size cost (unlike inlining the 24 MB base64 `binaryInlined`).
+ */
 export function createWorkerEngine(): GrammarEngine {
-  return new GrammarEngine(new WorkerLinter({ binary }));
+  const absoluteWasmUrl = toAbsoluteWasmUrl(String(binary.url), globalThis.location.href);
+  const workerBinary = createBinaryModuleFromUrl(absoluteWasmUrl, 'full');
+  return new GrammarEngine(new WorkerLinter({ binary: workerBinary }));
+}
+
+/**
+ * Resolve harper's (possibly root-relative) WASM URL to an absolute URL against
+ * the page location, so a blob-origin Web Worker can fetch it.
+ *
+ * Pure and exported for testing. An already-absolute URL passes through
+ * unchanged; a root-relative one is anchored to the page origin.
+ */
+export function toAbsoluteWasmUrl(wasmUrl: string, pageHref: string): string {
+  return new URL(wasmUrl, pageHref).href;
 }
 
 /**
