@@ -108,6 +108,7 @@ export class ModelRouter {
       case OperationType.Summarize:
       case OperationType.Expand:
       case OperationType.VoiceRefine:
+      case OperationType.Proofread:
         return ModelTarget.Sonnet;
       default: {
         const _exhaustive: never = operation;
@@ -145,6 +146,7 @@ export class ModelRouter {
       case OperationType.Summarize:
       case OperationType.Expand:
       case OperationType.VoiceRefine:
+      case OperationType.Proofread:
         return {
           target: ModelTarget.Sonnet,
           operation,

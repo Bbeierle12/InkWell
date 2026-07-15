@@ -13,6 +13,7 @@
     "lint": "eslint src/"
   },
   "dependencies": {
+    "@inkwell/grammar": "workspace:*",
     "@inkwell/shared": "workspace:*",
     "@tiptap/core": "^2.11.2",
     "@tiptap/extension-collaboration": "^2.11.2",

@@ -22,7 +22,7 @@ import type { UseVoicePipelineReturn } from '../hooks/useVoicePipeline';
 
 interface ToolbarProps {
   editor: Editor | null;
-  onAIOperation: (operation: OperationType) => void;
+  onAIOperation: (operation: OperationType, args?: string) => void;
   voicePipeline: UseVoicePipelineReturn;
   isLocalMode: boolean;
   onOpenSettings?: () => void;
@@ -562,22 +562,53 @@ function AIRibbon({
   onAIOperation,
 }: {
   editor: Editor | null;
-  onAIOperation: (op: OperationType) => void;
+  onAIOperation: (op: OperationType, args?: string) => void;
 }) {
   const ghostTextEnabled = useSettingsStore((s) => Boolean(s.ghostTextEnabled));
   const setGhostTextEnabled = useSettingsStore((s) => s.setGhostTextEnabled);
 
   return (
     <>
-      <Group label="Rewrite">
-        <RibbonButton
-          big
-          label="Rewrite"
-          icon={Icon.spark}
-          className="ai"
-          disabled={!editor}
-          onClick={() => onAIOperation(OperationType.Rewrite)}
-        />
+      <Group label="Rewrite & Tones">
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <RibbonButton
+            big
+            label="Rewrite"
+            icon={Icon.spark}
+            className="ai"
+            disabled={!editor}
+            onClick={() => onAIOperation(OperationType.Rewrite)}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, justifyContent: 'center' }}>
+            <button
+              type="button"
+              className="inkwell-rbtn small ai"
+              disabled={!editor}
+              onClick={() => onAIOperation(OperationType.Rewrite, 'Sweet and Friendly')}
+              style={{ height: 20, padding: '2px 6px', fontSize: 10, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              <span>🌸</span> Sweet & Friendly
+            </button>
+            <button
+              type="button"
+              className="inkwell-rbtn small ai"
+              disabled={!editor}
+              onClick={() => onAIOperation(OperationType.Rewrite, 'Professional and Clear')}
+              style={{ height: 20, padding: '2px 6px', fontSize: 10, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              <span>💼</span> Professional
+            </button>
+            <button
+              type="button"
+              className="inkwell-rbtn small ai"
+              disabled={!editor}
+              onClick={() => onAIOperation(OperationType.Rewrite, 'Short and Direct')}
+              style={{ height: 20, padding: '2px 6px', fontSize: 10, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
+              <span>⚡</span> Short & Direct
+            </button>
+          </div>
+        </div>
       </Group>
       <Group label="Shape">
         <RibbonButton
@@ -654,28 +685,56 @@ function AIRibbon({
   );
 }
 
-function ReviewRibbon() {
+function ReviewRibbon({
+  editor,
+  onAIOperation,
+}: {
+  editor: Editor | null;
+  onAIOperation: (op: OperationType, args?: string) => void;
+}) {
+  const grammarSpelling = useSettingsStore((s) => s.grammarSpelling);
+  const grammarGrammar = useSettingsStore((s) => s.grammarGrammar);
+  const setGrammarSpelling = useSettingsStore((s) => s.setGrammarSpelling);
+  const setGrammarGrammar = useSettingsStore((s) => s.setGrammarGrammar);
+
   return (
     <>
       <Group label="Proofing">
-        <RibbonButton
-          big
-          label="Spell"
-          icon={
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 15l3-7h6l3 7M6 12h8" />
-              <path d="M4 17h12" />
-            </svg>
-          }
-        />
-        <RibbonButton
-          label="Grammar"
-          icon={
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 10h12M4 6h8M4 14h10" />
-            </svg>
-          }
-        />
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <RibbonButton
+            big
+            label="AI Proofread"
+            icon={Icon.spark}
+            className="ai"
+            disabled={!editor}
+            onClick={() => onAIOperation(OperationType.Proofread)}
+          />
+          <div className="inkwell-rcluster" style={{ gap: 4 }}>
+            <SmallButton
+              icon={
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 15l3-7h6l3 7M6 12h8" />
+                  <path d="M4 17h12" />
+                </svg>
+              }
+              label="Spell"
+              ariaLabel="Spell"
+              active={grammarSpelling}
+              onClick={() => setGrammarSpelling(!grammarSpelling)}
+            />
+            <SmallButton
+              icon={
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 10h12M4 6h8M4 14h10" />
+                </svg>
+              }
+              label="Grammar"
+              ariaLabel="Grammar"
+              active={grammarGrammar}
+              onClick={() => setGrammarGrammar(!grammarGrammar)}
+            />
+          </div>
+        </div>
       </Group>
       <Group label="Comments">
         <RibbonButton big label="New" icon={Icon.chat} />
@@ -844,7 +903,7 @@ export function Toolbar({
           {tab === 'Insert' && <InsertRibbon editor={editor} />}
           {tab === 'Write' && <WriteRibbon />}
           {tab === 'AI' && <AIRibbon editor={editor} onAIOperation={onAIOperation} />}
-          {tab === 'Review' && <ReviewRibbon />}
+          {tab === 'Review' && <ReviewRibbon editor={editor} onAIOperation={onAIOperation} />}
           {tab === 'View' && <ViewRibbon onToggleChat={onToggleChat} />}
           {tab === 'Voice' && <VoiceRibbon voicePipeline={voicePipeline} />}
         </div>

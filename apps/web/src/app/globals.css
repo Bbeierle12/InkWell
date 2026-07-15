@@ -25,6 +25,8 @@
   --diff-ins: #3a7a4a;
   --diff-ins-bg: #e6f1e3;
   --rec: #c0392b;
+  --grammar-spelling: #dc2626;
+  --grammar-grammar: #2563eb;
 
   --foreground: var(--ink);
   --background: var(--paper);
@@ -114,6 +116,93 @@ body {
   background: var(--diff-ins-bg);
   padding: 1px 2px;
   border-radius: 2px;
+}
+
+.inkwell-grammar {
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.inkwell-grammar-spelling {
+  text-decoration-color: var(--grammar-spelling);
+}
+
+.inkwell-grammar-grammar {
+  text-decoration-color: var(--grammar-grammar);
+}
+
+/* ── Grammar fix popover ────────────────────────────────────────────────── */
+
+.inkwell-grammar-popover {
+  background: var(--page);
+  border: 1px solid var(--rule-2);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.06);
+  padding: 8px;
+  min-width: 200px;
+  max-width: 320px;
+  font-family: 'Inter', sans-serif;
+}
+
+.inkwell-grammar-popover-message {
+  margin: 0 0 8px;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+
+.inkwell-grammar-popover-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inkwell-grammar-popover-suggestion {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.inkwell-grammar-popover-suggestion:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.inkwell-grammar-popover-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--rule);
+}
+
+.inkwell-grammar-popover-action {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.inkwell-grammar-popover-action:hover {
+  background: var(--page);
+  border-color: var(--rule);
+  color: var(--ink);
 }
 
 .inkwell-diff-toolbar {

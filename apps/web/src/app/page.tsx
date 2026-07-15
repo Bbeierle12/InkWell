@@ -12,6 +12,9 @@ import {
   DiffPreviewPluginKey,
   AIUndo,
   SlashCommands,
+  GrammarCheck,
+  grammarCheckKey,
+  setGrammarEnabled,
 } from '@inkwell/editor';
 import type { SlashCommandItem } from '@inkwell/editor';
 
@@ -26,6 +29,7 @@ import { SettingsModal } from '@/components/SettingsModal';
 import { useDocumentAI } from '@/hooks/useDocumentAI';
 import { useChatAI } from '@/hooks/useChatAI';
 import { useGhostText } from '@/hooks/useGhostText';
+import { useGrammar } from '@/hooks/useGrammar';
 import { useVoicePipeline } from '@/hooks/useVoicePipeline';
 import { useAutoSave } from '@/hooks/useAutoSave';
 import { useFileOpen } from '@/hooks/useFileOpen';
@@ -67,6 +71,8 @@ export default function Home() {
     editorFontSize,
     editorWidth,
     spellCheck,
+    grammarSpelling,
+    grammarGrammar,
     ghostTextEnabled,
   } = useSettingsStore();
 
@@ -108,6 +114,9 @@ export default function Home() {
     setShowSetup(false);
   }, []);
 
+  const { check: checkGrammar, spelling: grammarSpellingEnabled, grammar: grammarGrammarEnabled } =
+    useGrammar();
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -128,6 +137,12 @@ export default function Home() {
           }
         },
       }),
+      GrammarCheck.configure({
+        check: checkGrammar,
+        debounceMs: 500,
+        spelling: grammarSpellingEnabled,
+        grammar: grammarGrammarEnabled,
+      }),
     ],
     content: '',
     editorProps: {
@@ -136,7 +151,9 @@ export default function Home() {
         role: 'textbox',
         'aria-label': 'Document editor',
         'aria-multiline': 'true',
-        spellcheck: spellCheck ? 'true' : 'false',
+        // Native browser spellcheck must yield to the local grammar engine, or the
+        // user sees TWO wavy underlines under the same misspelling.
+        spellcheck: spellCheck && !grammarSpelling ? 'true' : 'false',
       },
     },
   });
@@ -175,11 +192,23 @@ export default function Home() {
           role: 'textbox',
           'aria-label': 'Document editor',
           'aria-multiline': 'true',
-          spellcheck: spellCheck ? 'true' : 'false',
+          // Native browser spellcheck must yield to the local grammar engine, or the
+          // user sees TWO wavy underlines under the same misspelling.
+          spellcheck: spellCheck && !grammarSpelling ? 'true' : 'false',
         },
       },
     });
-  }, [editor, spellCheck]);
+  }, [editor, spellCheck, grammarSpelling]);
+
+  // Propagate grammar category toggles into the live plugin. TipTap freezes
+  // extension options at construction, so the plugin's initial spelling/grammar
+  // options never update on their own — we must dispatch the meta.
+  useEffect(() => {
+    if (!editor) return;
+    editor.view.dispatch(
+      editor.state.tr.setMeta(grammarCheckKey, setGrammarEnabled(grammarSpelling, grammarGrammar)),
+    );
+  }, [editor, grammarSpelling, grammarGrammar]);
 
   const handleSlashCommand = useCallback(
     (operation: OperationType, args?: string) => {
@@ -228,8 +257,8 @@ export default function Home() {
   }, [editor, title, setTitle]);
 
   const handleAIOperation = useCallback(
-    (operation: OperationType) => {
-      executeOperation(operation);
+    (operation: OperationType, args?: string) => {
+      executeOperation(operation, args);
     },
     [executeOperation],
   );

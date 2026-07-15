@@ -38,6 +38,10 @@ interface SettingsState {
   smartQuotes: boolean;
   typewriterScrolling: boolean;
   showRuler: boolean;
+  grammarSpelling: boolean;
+  grammarGrammar: boolean;
+  grammarDictionary: string[];
+  grammarIgnoredLints: string;
 
   // AI
   aiProvider: AIProvider;
@@ -70,6 +74,10 @@ interface SettingsState {
   setSmartQuotes: (enabled: boolean) => void;
   setTypewriterScrolling: (enabled: boolean) => void;
   setShowRuler: (enabled: boolean) => void;
+  setGrammarSpelling: (enabled: boolean) => void;
+  setGrammarGrammar: (enabled: boolean) => void;
+  addGrammarWord: (word: string) => void;
+  setGrammarIgnoredLints: (json: string) => void;
   setAiProvider: (provider: AIProvider) => void;
   setClaudeApiKey: (key: string) => void;
   setOllamaBaseUrl: (url: string) => void;
@@ -101,6 +109,10 @@ type PersistedSettingsShape = Pick<
   | 'smartQuotes'
   | 'typewriterScrolling'
   | 'showRuler'
+  | 'grammarSpelling'
+  | 'grammarGrammar'
+  | 'grammarDictionary'
+  | 'grammarIgnoredLints'
   | 'aiProvider'
   | 'ollamaBaseUrl'
   | 'ollamaModel'
@@ -131,6 +143,10 @@ const DEFAULTS = {
   smartQuotes: true,
   typewriterScrolling: false,
   showRuler: true,
+  grammarSpelling: true,
+  grammarGrammar: true,
+  grammarDictionary: [] as string[],
+  grammarIgnoredLints: '',
   aiProvider: 'claude' as AIProvider,
   claudeApiKey: '',
   ollamaBaseUrl: 'http://localhost:11434',
@@ -216,6 +232,19 @@ export function sanitizePersistedSettings(value: unknown): Partial<PersistedSett
   }
   if (typeof value.showRuler === 'boolean') next.showRuler = value.showRuler;
 
+  if (typeof value.grammarSpelling === 'boolean') next.grammarSpelling = value.grammarSpelling;
+  if (typeof value.grammarGrammar === 'boolean') next.grammarGrammar = value.grammarGrammar;
+  if (typeof value.grammarIgnoredLints === 'string') {
+    next.grammarIgnoredLints = value.grammarIgnoredLints;
+  }
+  if (Array.isArray(value.grammarDictionary)) {
+    // Drop any non-string entries rather than letting a corrupt localStorage
+    // blob reach the WASM engine.
+    next.grammarDictionary = value.grammarDictionary.filter(
+      (w): w is string => typeof w === 'string',
+    );
+  }
+
   const aiProvider = pickStringEnum(value.aiProvider, AI_PROVIDER_VALUES);
   if (aiProvider) next.aiProvider = aiProvider;
 
@@ -295,6 +324,15 @@ export const useSettingsStore = create<SettingsState>()(
       setSmartQuotes: (smartQuotes) => set({ smartQuotes }),
       setTypewriterScrolling: (typewriterScrolling) => set({ typewriterScrolling }),
       setShowRuler: (showRuler) => set({ showRuler }),
+      setGrammarSpelling: (grammarSpelling) => set({ grammarSpelling }),
+      setGrammarGrammar: (grammarGrammar) => set({ grammarGrammar }),
+      addGrammarWord: (word) =>
+        set((s) =>
+          s.grammarDictionary.includes(word)
+            ? s
+            : { grammarDictionary: [...s.grammarDictionary, word] },
+        ),
+      setGrammarIgnoredLints: (grammarIgnoredLints) => set({ grammarIgnoredLints }),
       setAiProvider: (aiProvider) =>
         set({
           aiProvider: AI_PROVIDER_VALUES.includes(aiProvider) ? aiProvider : DEFAULTS.aiProvider,
@@ -333,6 +371,10 @@ export const useSettingsStore = create<SettingsState>()(
         smartQuotes: state.smartQuotes,
         typewriterScrolling: state.typewriterScrolling,
         showRuler: state.showRuler,
+        grammarSpelling: state.grammarSpelling,
+        grammarGrammar: state.grammarGrammar,
+        grammarDictionary: state.grammarDictionary,
+        grammarIgnoredLints: state.grammarIgnoredLints,
         aiProvider: state.aiProvider,
         ollamaBaseUrl: state.ollamaBaseUrl,
         ollamaModel: state.ollamaModel,
